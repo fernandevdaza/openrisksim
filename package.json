@@ -1,0 +1,27 @@
+{
+  "name": "openrisksim",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open-source Monte Carlo risk simulation, forecasting and optimization for spreadsheets (an alternative to Risk Simulator / @RISK / Crystal Ball).",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @openrisksim/web dev",
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "prettier": "^3.4.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

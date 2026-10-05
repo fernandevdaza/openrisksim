@@ -1,0 +1,39 @@
+{
+  "name": "@openrisksim/web",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p . && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@openrisksim/core": "workspace:*",
+    "@openrisksim/distributions": "workspace:*",
+    "@openrisksim/engine": "workspace:*",
+    "@openrisksim/finance": "workspace:*",
+    "@openrisksim/forecast": "workspace:*",
+    "@openrisksim/optimizer": "workspace:*",
+    "@openrisksim/workbook": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0",
+    "echarts": "^5.6.0",
+    "i18next": "^24.0.0",
+    "react-i18next": "^15.0.0",
+    "lucide-react": "^0.468.0",
+    "clsx": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.0",
+    "vite-plugin-pwa": "^0.21.0",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0"
+  }
+}

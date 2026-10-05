@@ -1,0 +1,27 @@
+{
+  "name": "@openrisksim/workbook",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@openrisksim/core": "workspace:*",
+    "@openrisksim/engine": "workspace:*",
+    "@openrisksim/distributions": "workspace:*",
+    "@openrisksim/finance": "workspace:*",
+    "hyperformula": "^3.4.0",
+    "exceljs": "^4.4.0",
+    "papaparse": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.3.15"
+  }
+}
