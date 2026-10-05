@@ -23,4 +23,18 @@ export default defineConfig({
     }),
   ],
   worker: { format: "es" },
+  build: {
+    chunkSizeWarningLimit: 2500,
+    rollupOptions: {
+      output: {
+        // keep big third-party libraries in their own long-term-cacheable chunks
+        manualChunks(id) {
+          if (id.includes("node_modules/echarts") || id.includes("node_modules/zrender")) return "echarts";
+          if (id.includes("node_modules/hyperformula")) return "hyperformula";
+          if (id.includes("node_modules/exceljs")) return "exceljs";
+          return undefined;
+        },
+      },
+    },
+  },
 });

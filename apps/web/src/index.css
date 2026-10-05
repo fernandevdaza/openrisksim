@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --grid-line: #e2e8f0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.dark {
+  --grid-line: #273449;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #f8fafc;
+}
+.dark body {
+  background: #020617;
+}
+
+/* While picking a range on the sheet, every modal is hidden (state kept mounted). */
+body.ors-picking .ors-modal {
+  display: none !important;
+}
+
+/* Compact scrollbars (Office-like density) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.dark * {
+  scrollbar-color: #475569 transparent;
+}
+
+@media print {
+  #root {
+    display: none;
+  }
+}

@@ -4,9 +4,11 @@
  */
 import { useState, type ReactNode, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 import clsx from "clsx";
+import { useTranslation } from "react-i18next";
 
 export { Chart } from "./Chart";
 export type { ChartProps } from "./Chart";
+export { RangeInput, resolveRangeRef, readRangeNumbers, formatRangeRef } from "./RangeInput";
 export { clsx };
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -58,7 +60,9 @@ export function NumberInput({
   disabled?: boolean;
 }) {
   const [text, setText] = useState<string | null>(null);
-  const shown = text ?? (value == null || Number.isNaN(value) ? "" : String(value));
+  const { i18n } = useTranslation();
+  const comma = decimalCommaLocale(i18n.language);
+  const shown = text ?? (value == null || Number.isNaN(value) ? "" : comma ? String(value).replace(".", ",") : String(value));
   return (
     <input
       inputMode="decimal"
@@ -70,12 +74,35 @@ export function NumberInput({
       disabled={disabled}
       onChange={(e) => {
         setText(e.target.value);
-        const n = Number(e.target.value.replace(",", "."));
-        if (e.target.value.trim() !== "" && Number.isFinite(n)) onChange(n);
+        const n = parseNumberInput(e.target.value);
+        if (Number.isFinite(n)) onChange(n);
       }}
       onBlur={() => setText(null)}
     />
   );
+}
+
+/** Locales that write decimals with a comma (es, pt, fr, de, it…). */
+export function decimalCommaLocale(lang: string | undefined): boolean {
+  return /^(es|pt|fr|de|it|nl|ru|tr|pl)/i.test(lang ?? "");
+}
+
+/**
+ * Parses what a user typed in a number field, accepting either decimal separator:
+ * "12,5", "12.5", "1.234,5", "1,234.5", "-3e4". Returns NaN for empty/invalid input.
+ */
+export function parseNumberInput(raw: string): number {
+  let s = raw.trim().replace(/\s|%$/g, "");
+  if (s === "") return NaN;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    // the separator that appears last is the decimal one
+    s = lastComma > lastDot ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    s = s.replace(",", ".");
+  }
+  return Number(s);
 }
 
 export function Select<T extends string>({
@@ -204,8 +231,19 @@ export function Modal({
   if (!open) return null;
   const w = { sm: "max-w-md", md: "max-w-2xl", lg: "max-w-4xl", xl: "max-w-6xl" }[size];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={clsx("flex max-h-[92vh] w-full flex-col rounded-lg bg-white shadow-2xl dark:bg-slate-900", w)} role="dialog" aria-modal="true">
+    <div className="ors-modal fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div
+        className={clsx("flex max-h-[92vh] w-full flex-col rounded-lg bg-white shadow-2xl dark:bg-slate-900", w)}
+        role="dialog"
+        aria-modal="true"
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && !e.defaultPrevented) {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }
+        }}
+      >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
           <button onClick={onClose} className="rounded p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
