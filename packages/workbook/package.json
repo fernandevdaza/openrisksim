@@ -10,7 +10,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "export-examples": "vitest run --config scripts/vitest.export.config.ts"
   },
   "dependencies": {
     "@openrisksim/core": "workspace:*",
