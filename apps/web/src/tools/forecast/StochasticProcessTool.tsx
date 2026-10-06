@@ -4,7 +4,7 @@
  */
 import { useMemo, useState } from "react";
 import { Play, Sigma } from "lucide-react";
-import { geometricBrownianMotion, meanReversion, jumpDiffusion, estimateGbm } from "@openrisksim/forecast";
+import { geometricBrownianMotion, meanReversion, jumpDiffusion, estimateGbm, pathPercentileBands } from "@openrisksim/forecast";
 import { Button, Chart, Field, Select, Table } from "../../components/ui";
 import { useToolsT } from "../common/i18n";
 import { DataSourceInput, emptySource, resolveDataSource, type DataSourceState } from "../common/RangeInput";
@@ -13,6 +13,8 @@ import { fmt, fmtAuto, fmtPct } from "../common/format";
 import { fanChartOption } from "../common/charts";
 import { estimateMeanReversion, pathPercentiles } from "../common/stats";
 import { ToolError } from "../common/workbook";
+import { levelNumber } from "../../lib/certainty";
+import { ConfidenceLevels } from "./ConfidenceLevels";
 
 type Process = "gbm" | "meanReversion" | "jump";
 const PS = [0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95];
@@ -53,6 +55,7 @@ export default function StochasticProcessTool(_props: { onClose(): void }) {
   const [estDt, setEstDt] = useState(1 / 12);
   const [estMsg, setEstMsg] = useState<string | null>(null);
   const [paths, setPaths] = useState<number[][] | null>(null);
+  const [levels, setLevels] = useState<number[]>([0.5, 0.8, 0.9]);
   const [error, setError] = useState<unknown>(null);
   const set = (patch: Partial<Params>) => setP({ ...p, ...patch });
 
@@ -97,26 +100,31 @@ export default function StochasticProcessTool(_props: { onClose(): void }) {
   };
 
   const pct = useMemo(() => (paths ? pathPercentiles(paths, PS) : null), [paths]);
+  const fan = useMemo(() => (paths ? pathPercentileBands(paths, levels) : null), [paths, levels]);
+  const lvl = (l: number) => levelNumber(l, locale);
+  /** Percentile number of a band edge, e.g. 0.05 → "5", 0.025 → "2,5". */
+  const pctl = (q: number) => fmt(Math.round(q * 1000) / 10, 1, locale);
+  const bandLabel = (l: number) => t("stochastic.bandLevel", { level: lvl(l), lo: pctl((1 - l) / 2), hi: pctl((1 + l) / 2) });
   const xLabels = useMemo(() => (paths ? paths[0].map((_, i) => fmt(i * p.dt, 3, locale)) : []), [paths, p.dt, locale]);
 
   const chart = useMemo(() => {
-    if (!paths || !pct) return null;
+    if (!paths || !fan) return null;
     return fanChartOption({
       x: xLabels,
-      bands: [
-        { lower: pct[0], upper: pct[6], label: t("stochastic.band90") },
-        { lower: pct[1], upper: pct[5], label: t("stochastic.band80") },
-        { lower: pct[2], upper: pct[4], label: t("stochastic.band50") },
-      ],
-      median: pct[3],
+      // widest band first: it is drawn lightest, inner bands progressively darker
+      bands: [...fan.bands].reverse().map((b) => ({ lower: b.lower, upper: b.upper, label: bandLabel(b.level) })),
+      median: fan.median,
       samplePaths: paths.slice(0, 8),
       labels: { median: t("stochastic.median"), paths: t("stochastic.samplePaths"), time: t("stochastic.time"), value: t("common.value") },
       locale,
     });
-  }, [paths, pct, xLabels, locale, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paths, fan, xLabels, locale, t]);
 
   const finalStats = pct ? PS.map((q, i) => ({ q, v: pct[i][pct[i].length - 1] })) : [];
   const finalMean = paths ? paths.reduce((a, path) => a + path[path.length - 1], 0) / paths.length : NaN;
+  const last = (arr: number[]) => arr[arr.length - 1];
+  const widest = fan && fan.bands.length ? fan.bands[fan.bands.length - 1] : null;
 
   const form = (
     <>
@@ -155,6 +163,7 @@ export default function StochasticProcessTool(_props: { onClose(): void }) {
         <NumField label={t("stochastic.paths")} value={p.paths} min={10} max={20000} onChange={(paths) => set({ paths })} />
       </div>
       <NumField label={t("common.seed")} value={p.seed} onChange={(seed) => set({ seed })} />
+      <ConfidenceLevels value={levels} onChange={setLevels} max={3} hint={t("stochastic.levelsHint")} />
       <Button variant="primary" onClick={run}>
         <Play size={14} />
         {t("stochastic.run")}
@@ -191,22 +200,39 @@ export default function StochasticProcessTool(_props: { onClose(): void }) {
               actions={
                 <ExportButton
                   sheetName={t("stochastic.sheetName")}
-                  build={() => [
-                    [t("stochastic.time"), ...PS.map((q) => `P${Math.round(q * 100)}`)],
-                    ...pct[0].map((_, k) => [k * p.dt, ...PS.map((__, i) => pct[i][k])]),
-                  ]}
+                  build={() => {
+                    const bands = fan?.bands ?? [];
+                    const lowers = [...bands].reverse();
+                    return [
+                      [
+                        t("stochastic.time"),
+                        ...PS.map((q) => `P${Math.round(q * 100)}`),
+                        ...lowers.map((b) => t("stochastic.lowerLevel", { level: lvl(b.level) })),
+                        ...bands.map((b) => t("stochastic.upperLevel", { level: lvl(b.level) })),
+                      ],
+                      ...pct[0].map((_, k) => [k * p.dt, ...PS.map((__, i) => pct[i][k]), ...lowers.map((b) => b.lower[k]), ...bands.map((b) => b.upper[k])]),
+                    ];
+                  }}
                 />
               }
             >
               {chart && <Chart option={chart} height={380} />}
             </Section>
             <Note>
-              {t("stochastic.interpretation", {
-                horizon: fmt(p.steps * p.dt, 2, locale),
-                p5: fmtAuto(finalStats[0]?.v, locale),
-                p95: fmtAuto(finalStats[6]?.v, locale),
-                median: fmtAuto(finalStats[3]?.v, locale),
-              })}
+              {widest
+                ? t("stochastic.interpretationLevel", {
+                    horizon: fmt(p.steps * p.dt, 2, locale),
+                    level: lvl(widest.level),
+                    lo: fmtAuto(last(widest.lower), locale),
+                    hi: fmtAuto(last(widest.upper), locale),
+                    median: fmtAuto(fan ? last(fan.median) : NaN, locale),
+                  })
+                : t("stochastic.interpretation", {
+                    horizon: fmt(p.steps * p.dt, 2, locale),
+                    p5: fmtAuto(finalStats[0]?.v, locale),
+                    p95: fmtAuto(finalStats[6]?.v, locale),
+                    median: fmtAuto(finalStats[3]?.v, locale),
+                  })}
             </Note>
             <Section title={t("stochastic.finalTitle")}>
               <Table
@@ -214,7 +240,11 @@ export default function StochasticProcessTool(_props: { onClose(): void }) {
                   { key: "k", label: t("descriptive.statistic") },
                   { key: "v", label: t("common.value"), align: "right" },
                 ]}
-                rows={[{ k: t("common.mean"), v: fmtAuto(finalMean, locale) }, ...finalStats.map((s) => ({ k: `${t("common.percentile")} ${Math.round(s.q * 100)}`, v: fmtAuto(s.v, locale) }))]}
+                rows={[
+                  { k: t("common.mean"), v: fmtAuto(finalMean, locale) },
+                  ...finalStats.map((s) => ({ k: `${t("common.percentile")} ${Math.round(s.q * 100)}`, v: fmtAuto(s.v, locale) })),
+                  ...(fan?.bands ?? []).map((b) => ({ k: bandLabel(b.level), v: `[${fmtAuto(last(b.lower), locale)} ; ${fmtAuto(last(b.upper), locale)}]` })),
+                ]}
               />
             </Section>
           </>

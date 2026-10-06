@@ -25,7 +25,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @openrisksim/web build
+      - run: pnpm build:site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web/dist

@@ -34,4 +34,25 @@ describe("buildSimulationReport", () => {
     expect(back.sheets.map((s) => s.name)).toEqual(["Proyecto", "Resumen", "Pronósticos", "Supuestos", "Sensibilidad", "Datos de simulación"]);
     expect(back.model).toEqual(wb.model);
   });
+
+  it("uses each forecast's confidence level for the CI of the mean and reports the backend", async () => {
+    const wb = buildExample("project");
+    const model = { ...wb.model!, settings: { ...wb.model!.settings, trials: 800, acceleration: "standard" as const } };
+    const result = await runSimulationInline({ workbook: wb, model });
+    const uniform = { ...model, forecasts: model.forecasts.map((f) => ({ ...f, confidence: 0.9 })) };
+    const es = buildSimulationReport(uniform, result, "es");
+    const low = es[1].rows.find((r) => r[0] === "IC 90 % de la media – inferior")!;
+    const high = es[1].rows.find((r) => r[0] === "IC 90 % de la media – superior")!;
+    const st = result.forecasts.f_npv.stats;
+    expect(low[1] as number).toBeGreaterThan(st.meanCI95[0]);
+    expect(high[1] as number).toBeLessThan(st.meanCI95[1]);
+    expect(((low[1] as number) + (high[1] as number)) / 2).toBeCloseTo(st.mean, 6);
+    expect(es[0].rows.find((r) => r[0] === "Motor de evaluación")?.[1]).toBe("Estándar (hoja de cálculo)");
+
+    const mixed = { ...model, forecasts: model.forecasts.map((f, i) => ({ ...f, confidence: i ? 0.99 : undefined })) };
+    const en = buildSimulationReport(mixed, result, "en");
+    expect(en[1].rows.find((r) => r[0] === "CI confidence level")).toEqual(["CI confidence level", "95%", "99%"]);
+    const lowEn = en[1].rows.find((r) => r[0] === "CI of mean – lower")!;
+    expect(lowEn[1]).toBeCloseTo(st.meanCI95[0], 9);
+  });
 });

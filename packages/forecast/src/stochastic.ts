@@ -119,3 +119,44 @@ export function estimateGbm(prices: number[], dt: number): { drift: number; vola
   const volatility = Math.sqrt(v / dt);
   return { drift: m / dt + 0.5 * volatility * volatility, volatility };
 }
+
+/** Linear-interpolation percentile (type 7) of an ascending-sorted array. */
+function sortedPercentile(sorted: number[], q: number): number {
+  const n = sorted.length;
+  if (n === 0) return NaN;
+  const pos = (n - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.min(n - 1, lo + 1);
+  return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
+}
+
+/**
+ * Per-step central percentile bands of simulated paths: for each level L the band runs from the
+ * (1−L)/2 to the (1+L)/2 percentile across paths (e.g. L = 0.9 → P5…P95). Also returns the median.
+ * Levels must lie in (0, 1); they are returned sorted ascending and de-duplicated.
+ */
+export function pathPercentileBands(
+  paths: number[][],
+  levels: readonly number[],
+): { median: number[]; bands: { level: number; lower: number[]; upper: number[] }[] } {
+  const lv: number[] = [];
+  for (const l of [...levels].sort((a, b) => a - b)) {
+    if (!(l > 0 && l < 1)) throw new Error(`pathPercentileBands: level ${l} must be in (0, 1)`);
+    if (!lv.length || Math.abs(lv[lv.length - 1] - l) > 1e-9) lv.push(l);
+  }
+  const steps = paths.reduce((m, p) => Math.max(m, p.length), 0);
+  const median: number[] = [];
+  const bands = lv.map((level) => ({ level, lower: [] as number[], upper: [] as number[] }));
+  const col: number[] = [];
+  for (let k = 0; k < steps; k++) {
+    col.length = 0;
+    for (const p of paths) if (k < p.length && Number.isFinite(p[k])) col.push(p[k]);
+    col.sort((a, b) => a - b);
+    median.push(sortedPercentile(col, 0.5));
+    for (const b of bands) {
+      b.lower.push(sortedPercentile(col, (1 - b.level) / 2));
+      b.upper.push(sortedPercentile(col, (1 + b.level) / 2));
+    }
+  }
+  return { median, bands };
+}

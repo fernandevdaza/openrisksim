@@ -3,8 +3,10 @@ import { useTranslation } from "react-i18next";
 import type { SimulationSettings } from "@openrisksim/core";
 import { Button, Field, Modal, NumberInput, Select } from "../components/ui";
 import { useModelStore } from "../store/model";
+import { LARGE_RUN_TRIALS, MAX_TRIALS } from "../store/simulation";
+import { AccelerationSettings, useAccelerationCapabilities } from "./AccelerationSettings";
 
-const TRIAL_PRESETS = [1000, 5000, 10000, 50000, 100000];
+const TRIAL_PRESETS = [1000, 5000, 10000, 100000, 1000000];
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
@@ -12,7 +14,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [s, setS] = useState<SimulationSettings>(() => structuredClone(model.settings));
   const [randomSeed, setRandomSeed] = useState(model.settings.seed == null);
   const pc = s.precisionControl ?? null;
-  const trialsOk = Number.isInteger(s.trials) && s.trials >= 10 && s.trials <= 1_000_000;
+  const trialsOk = Number.isInteger(s.trials) && s.trials >= 10 && s.trials <= MAX_TRIALS;
+  const caps = useAccelerationCapabilities(model);
+  const mode = s.acceleration ?? "auto";
+  // Runs that will (most likely) be evaluated by the spreadsheet engine.
+  const unaccelerated = mode === "standard" || (mode === "auto" && !!caps && caps !== "error" && !caps.compile.ok);
+  const largeRunWarning = trialsOk && s.trials > LARGE_RUN_TRIALS && unaccelerated;
 
   const save = () => {
     if (!trialsOk) return;
@@ -36,9 +43,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       }
     >
       <div className="flex flex-col gap-4">
-        <Field label={t("settings.trials")} hint={trialsOk ? t("settings.trialsHint") : <span className="text-red-600">{t("settings.trialsError")}</span>}>
+        <Field
+          label={t("settings.trials")}
+          hint={
+            !trialsOk ? (
+              <span className="text-red-600">{t("accel.trialsError")}</span>
+            ) : largeRunWarning ? (
+              <span className="text-amber-700 dark:text-amber-300" data-testid="large-run-warning">{t("accel.bigRunWarning")}</span>
+            ) : (
+              t("settings.trialsHint")
+            )
+          }
+        >
           <div className="flex items-center gap-2">
-            <NumberInput className="w-32" value={s.trials} onChange={(v) => setS({ ...s, trials: Math.round(v) })} />
+            <NumberInput className="w-32" max={MAX_TRIALS} value={s.trials} onChange={(v) => setS({ ...s, trials: Math.round(v) })} />
             <div className="flex flex-wrap gap-1">
               {TRIAL_PRESETS.map((n) => (
                 <button
@@ -47,7 +65,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   onClick={() => setS({ ...s, trials: n })}
                   className={`rounded border px-1.5 py-0.5 text-xs ${s.trials === n ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800"}`}
                 >
-                  {n.toLocaleString()}
+                  {n >= 1_000_000 ? `${n / 1_000_000} M` : n.toLocaleString()}
                 </button>
               ))}
             </div>
@@ -119,6 +137,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </div>
           )}
         </fieldset>
+
+        <AccelerationSettings settings={s} onChange={setS} model={model} caps={caps} />
       </div>
     </Modal>
   );

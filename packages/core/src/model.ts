@@ -28,6 +28,10 @@ export interface ForecastDef {
   cell: CellRef;
   /** Optional unit/format for display: "currency" | "percent" | "number". */
   format?: "currency" | "percent" | "number";
+  /** Initial two-tail certainty band shown in the forecast chart, fraction in (0,1). Default 0.9. */
+  certainty?: number;
+  /** Confidence level for the confidence interval of the mean, fraction in (0,1). Default 0.95. */
+  confidence?: number;
 }
 
 /** Decision variable for optimization. */
@@ -52,6 +56,16 @@ export interface CorrelationDef {
 
 export type SamplingMethod = "monteCarlo" | "latinHypercube";
 
+/**
+ * How trials are evaluated.
+ *  - standard:  one Web Worker, full spreadsheet engine (HyperFormula). Supports every formula.
+ *  - multicore: several Web Workers, each with its own spreadsheet engine; identical results to standard.
+ *  - compiled:  formulas between assumptions and forecasts compiled to a JS function (f64, exact).
+ *  - gpu:       formulas compiled to a WebGPU compute shader (f32), validated against the CPU.
+ *  - auto:      fastest mode that supports the model, falling back to standard.
+ */
+export type AccelerationMode = "auto" | "standard" | "multicore" | "compiled" | "gpu";
+
 export interface SimulationSettings {
   trials: number;
   /** Null = random seed each run. */
@@ -61,6 +75,10 @@ export interface SimulationSettings {
   applyCorrelations: boolean;
   /** Stop early when forecast mean precision is reached (optional). */
   precisionControl?: { forecastId: string; relativeError: number; confidence: number } | null;
+  /** Evaluation backend. Missing = "auto". */
+  acceleration?: AccelerationMode;
+  /** Worker count for "multicore"; null/missing = hardwareConcurrency − 1 (min 1, max 16). */
+  workers?: number | null;
 }
 
 export const DEFAULT_SETTINGS: SimulationSettings = {
@@ -69,6 +87,8 @@ export const DEFAULT_SETTINGS: SimulationSettings = {
   sampling: "latinHypercube",
   applyCorrelations: true,
   precisionControl: null,
+  acceleration: "auto",
+  workers: null,
 };
 
 /** Everything that the user defines on top of the workbook. Persisted inside exported .xlsx and as .orsim.json. */

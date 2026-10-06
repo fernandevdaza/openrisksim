@@ -1,0 +1,218 @@
+/* OpenRiskSim brand palette on top of the VitePress default theme. */
+
+:root {
+  --vp-font-family-base: "Geist Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --vp-font-family-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* brand: teal */
+  --vp-c-brand-1: #0f766e;
+  --vp-c-brand-2: #0d9488;
+  --vp-c-brand-3: #14b8a6;
+  --vp-c-brand-soft: rgba(20, 184, 166, 0.14);
+
+  /* accent: indigo (used for "tip" boxes and highlights) */
+  --ors-indigo: #6366f1;
+  --vp-c-tip-1: #4f46e5;
+  --vp-c-tip-2: #6366f1;
+  --vp-c-tip-3: #818cf8;
+  --vp-c-tip-soft: rgba(99, 102, 241, 0.12);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #14b8a6 10%, #6366f1 90%);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, rgba(45, 212, 191, 0.55) 0%, rgba(99, 102, 241, 0.55) 100%);
+  --vp-home-hero-image-filter: blur(56px);
+
+  --vp-button-brand-bg: #0d9488;
+  --vp-button-brand-hover-bg: #0f766e;
+  --vp-button-brand-active-bg: #115e59;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-text: #ffffff;
+}
+
+.dark {
+  --vp-c-bg: #05070b;
+  --vp-c-bg-alt: #080b12;
+  --vp-c-bg-elv: #0c111b;
+  --vp-c-bg-soft: #0e1420;
+  --vp-c-divider: #1a2232;
+  --vp-c-gutter: #05070b;
+  --vp-c-border: #263044;
+
+  --vp-c-brand-1: #2dd4bf;
+  --vp-c-brand-2: #14b8a6;
+  --vp-c-brand-3: #0d9488;
+  --vp-c-brand-soft: rgba(45, 212, 191, 0.16);
+
+  --vp-c-tip-1: #a5b4fc;
+  --vp-c-tip-2: #818cf8;
+  --vp-c-tip-3: #6366f1;
+  --vp-c-tip-soft: rgba(99, 102, 241, 0.16);
+
+  --vp-button-brand-bg: #14b8a6;
+  --vp-button-brand-hover-bg: #2dd4bf;
+  --vp-button-brand-active-bg: #0d9488;
+  --vp-button-brand-text: #05070b;
+  --vp-button-brand-hover-text: #05070b;
+
+  --vp-code-block-bg: #0a0f18;
+  --vp-sidebar-bg-color: #070a10;
+}
+
+.dark .VPNav .VPNavBar:not(.home.top),
+.dark .VPNavBar.has-sidebar .content,
+.dark .VPLocalNav {
+  background-color: rgba(5, 7, 11, 0.86);
+}
+
+/* Home page */
+.VPHero .name {
+  letter-spacing: -0.03em;
+}
+.VPHero .image-src {
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 48px;
+}
+@media (min-width: 960px) {
+  .VPHero .image-src {
+    max-width: 300px;
+    max-height: 300px;
+  }
+}
+.VPFeature {
+  transition: border-color 0.2s ease;
+}
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-2);
+}
+
+/* Screenshots and figures */
+.vp-doc img {
+  border-radius: 10px;
+  border: 1px solid var(--vp-c-divider);
+}
+.vp-doc img.no-frame,
+.VPHero img {
+  border: 0;
+}
+.vp-doc figure {
+  margin: 1.25rem 0;
+}
+.vp-doc figcaption {
+  font-size: 0.85rem;
+  color: var(--vp-c-text-2);
+  text-align: center;
+  margin-top: 0.4rem;
+}
+
+/* Keyboard keys */
+.vp-doc kbd {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.8em;
+  padding: 0.1em 0.45em;
+  border: 1px solid var(--vp-c-divider);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--vp-c-bg-soft);
+  white-space: nowrap;
+}
+
+/* Simple formula blocks (no MathJax) */
+.vp-doc .formula {
+  font-family: var(--vp-font-family-mono);
+  background: var(--vp-c-bg-soft);
+  border-left: 3px solid var(--vp-c-brand-2);
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  margin: 1rem 0;
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 0.9em;
+}
+
+/* Cell colour swatches used in the guide */
+.swatch {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  border-radius: 3px;
+  vertical-align: -0.1em;
+  margin-right: 0.3em;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.swatch.green { background: #dcfce7; border-color: #16a34a; }
+.swatch.blue { background: #e0f2fe; border-color: #2563eb; }
+.swatch.yellow { background: #fef9c3; border-color: #ca8a04; }
+.dark .swatch.green { background: #14532d; }
+.dark .swatch.blue { background: #1e3a8a; }
+.dark .swatch.yellow { background: #713f12; }
+
+/* Distribution reference component */
+.dist-ref .dist-card {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem 0.4rem;
+  margin: 1rem 0;
+  background: var(--vp-c-bg-soft);
+}
+.dist-ref .dist-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+.dist-ref .dist-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.dist-ref .dist-id {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.8rem;
+  color: var(--vp-c-text-2);
+}
+.dist-ref .badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+}
+.dist-ref .badge.discrete {
+  background: var(--vp-c-tip-soft);
+  color: var(--vp-c-tip-1);
+}
+.dist-ref p {
+  margin: 0.45rem 0;
+}
+.dist-ref table {
+  font-size: 0.86rem;
+  margin: 0.5rem 0 0.6rem;
+}
+.dist-ref .filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.dist-ref .filters input {
+  flex: 1 1 220px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  background: var(--vp-c-bg);
+}
+.dist-ref .filters button {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.85rem;
+}
+.dist-ref .filters button.active {
+  border-color: var(--vp-c-brand-2);
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+}

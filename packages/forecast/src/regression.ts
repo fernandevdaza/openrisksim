@@ -5,8 +5,22 @@
 import { studentTQuantile, tTwoSidedP, fUpperP } from "./_stats";
 import { leastSquares } from "./linalg";
 
+export interface RegressionCoefficient {
+  name: string;
+  value: number;
+  stdError: number;
+  t: number;
+  pValue: number;
+  /** 95 % confidence interval (kept for backward compatibility). */
+  ci95: [number, number];
+  /** Confidence interval at `RegressionResult.confidenceLevel`. */
+  ci: [number, number];
+}
+
 export interface RegressionResult {
-  coefficients: { name: string; value: number; stdError: number; t: number; pValue: number; ci95: [number, number] }[];
+  coefficients: RegressionCoefficient[];
+  /** Confidence level of `coefficients[].ci` (default 0.95). */
+  confidenceLevel: number;
   r2: number;
   adjR2: number;
   fStatistic: number;
@@ -23,6 +37,29 @@ export interface RegressionResult {
   /** Variance inflation factor per regressor (same order as the columns of X). */
   vif: number[];
   anova: { regressionSS: number; residualSS: number; totalSS: number; dfReg: number; dfRes: number };
+  /** Whether the model has an intercept (the design row is [1, ...x] when true). */
+  intercept: boolean;
+  /** (XᵀX)⁻¹ of the design matrix, used by `predict`. */
+  xtxInv: number[][];
+}
+
+function checkConfidence(c: number | undefined): number {
+  const level = c ?? 0.95;
+  if (!Number.isFinite(level) || level < 0.5 || level > 0.999) throw new Error(`confidence level ${level} out of range [0.5, 0.999]`);
+  return level;
+}
+
+function makeCoef(name: string, b: number, se: number, dfRes: number, t95: number, tq: number): RegressionCoefficient {
+  const t = b / se;
+  return {
+    name,
+    value: b,
+    stdError: se,
+    t,
+    pValue: tTwoSidedP(t, dfRes),
+    ci95: [b - t95 * se, b + t95 * se],
+    ci: [b - tq * se, b + tq * se],
+  };
 }
 
 function rSquaredOf(y: number[], X: number[][], intercept: boolean): number {
@@ -44,9 +81,10 @@ export function multipleRegression(
   y: number[],
   X: number[][],
   names?: string[],
-  opts: { intercept?: boolean } = {},
+  opts: { intercept?: boolean; confidence?: number } = {},
 ): RegressionResult {
   const intercept = opts.intercept ?? true;
+  const confidenceLevel = checkConfidence(opts.confidence);
   const n = y.length;
   if (X.length !== n) throw new Error("multipleRegression: X and y must have the same number of rows");
   const k = n ? (X[0]?.length ?? 0) : 0;
@@ -66,20 +104,10 @@ export function multipleRegression(
   const ssr = sst - sse;
   const dfReg = k;
   const mse = sse / dfRes;
-  const tq = studentTQuantile(0.975, dfRes);
+  const t95 = studentTQuantile(0.975, dfRes);
+  const tq = studentTQuantile((1 + confidenceLevel) / 2, dfRes);
   const coefNames = intercept ? ["Intercept", ...colNames] : colNames;
-  const coefficients = fit.beta.map((b, j) => {
-    const se = Math.sqrt(mse * fit.xtxInv[j][j]);
-    const t = b / se;
-    return {
-      name: coefNames[j],
-      value: b,
-      stdError: se,
-      t,
-      pValue: tTwoSidedP(t, dfRes),
-      ci95: [b - tq * se, b + tq * se] as [number, number],
-    };
-  });
+  const coefficients = fit.beta.map((b, j) => makeCoef(coefNames[j], b, Math.sqrt(mse * fit.xtxInv[j][j]), dfRes, t95, tq));
   const r2 = sst > 0 ? 1 - sse / sst : NaN;
   const adjDen = intercept ? n - 1 : n;
   const adjR2 = 1 - ((1 - r2) * adjDen) / dfRes;
@@ -100,6 +128,7 @@ export function multipleRegression(
   });
   return {
     coefficients,
+    confidenceLevel,
     r2,
     adjR2,
     fStatistic,
@@ -112,11 +141,13 @@ export function multipleRegression(
     fitted: fit.fitted,
     vif,
     anova: { regressionSS: ssr, residualSS: sse, totalSS: sst, dfReg, dfRes },
+    intercept,
+    xtxInv: fit.xtxInv,
   };
 }
 
 /** Intercept-only "model" used when stepwise selects nothing. */
-function interceptOnly(y: number[]): RegressionResult {
+function interceptOnly(y: number[], confidenceLevel: number): RegressionResult {
   const n = y.length;
   const my = y.reduce((a, b) => a + b, 0) / n;
   const residuals = y.map((v) => v - my);
@@ -125,11 +156,13 @@ function interceptOnly(y: number[]): RegressionResult {
   const dfRes = n - 1;
   const mse = sst / dfRes;
   const se = Math.sqrt(mse / n);
-  const tq = studentTQuantile(0.975, dfRes);
+  const t95 = studentTQuantile(0.975, dfRes);
+  const tq = studentTQuantile((1 + confidenceLevel) / 2, dfRes);
   let dwNum = 0;
   for (let i = 1; i < n; i++) dwNum += (residuals[i] - residuals[i - 1]) ** 2;
   return {
-    coefficients: [{ name: "Intercept", value: my, stdError: se, t: my / se, pValue: tTwoSidedP(my / se, dfRes), ci95: [my - tq * se, my + tq * se] }],
+    coefficients: [makeCoef("Intercept", my, se, dfRes, t95, tq)],
+    confidenceLevel,
     r2: 0,
     adjR2: 0,
     fStatistic: NaN,
@@ -142,6 +175,8 @@ function interceptOnly(y: number[]): RegressionResult {
     fitted: y.map(() => my),
     vif: [],
     anova: { regressionSS: 0, residualSS: sst, totalSS: sst, dfReg: 0, dfRes },
+    intercept: true,
+    xtxInv: [[1 / n]],
   };
 }
 
@@ -154,14 +189,15 @@ export function stepwiseRegression(
   y: number[],
   X: number[][],
   names?: string[],
-  opts: { pEnter?: number; pRemove?: number } = {},
+  opts: { pEnter?: number; pRemove?: number; confidence?: number } = {},
 ): RegressionResult & { selected: string[] } {
+  const confidence = checkConfidence(opts.confidence);
   const pEnter = opts.pEnter ?? 0.05;
   const pRemove = Math.max(opts.pRemove ?? 0.1, pEnter);
   const k = X[0]?.length ?? 0;
   const colNames = Array.from({ length: k }, (_, j) => names?.[j] ?? `X${j + 1}`);
   const sub = (cols: number[]) => X.map((r) => cols.map((c) => r[c]));
-  const fitCols = (cols: number[]) => multipleRegression(y, sub(cols), cols.map((c) => colNames[c]));
+  const fitCols = (cols: number[]) => multipleRegression(y, sub(cols), cols.map((c) => colNames[c]), { confidence });
   let selected: number[] = [];
   const seen = new Set<string>();
   for (let iter = 0; iter < 4 * k + 4; iter++) {
@@ -206,6 +242,31 @@ export function stepwiseRegression(
     if (!changed || seen.has(key)) break;
     seen.add(key);
   }
-  const result = selected.length ? fitCols(selected) : interceptOnly(y);
+  const result = selected.length ? fitCols(selected) : interceptOnly(y, confidence);
   return { ...result, selected: selected.map((c) => colNames[c]) };
+}
+
+/**
+ * Point prediction at `xRow` (one value per regressor of the fitted model, in the order of its
+ * coefficients without the intercept — for a stepwise result, the selected variables) with a
+ * Student-t interval at `confidence` (default 0.95): the confidence interval of the mean
+ * response, or, with `prediction: true`, the prediction interval of a new observation.
+ */
+export function predict(
+  result: RegressionResult,
+  xRow: number[],
+  opts: { confidence?: number; prediction?: boolean } = {},
+): { value: number; lower: number; upper: number; stdError: number; level: number } {
+  const level = checkConfidence(opts.confidence);
+  const row = result.intercept ? [1, ...xRow] : xRow.slice();
+  const p = result.coefficients.length;
+  if (row.length !== p) throw new Error(`predict: expected ${p - (result.intercept ? 1 : 0)} regressor values, got ${xRow.length}`);
+  let value = 0;
+  for (let j = 0; j < p; j++) value += row[j] * result.coefficients[j].value;
+  let lev = 0;
+  for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) lev += row[a] * result.xtxInv[a][b] * row[b];
+  const s2 = result.standardError * result.standardError;
+  const stdError = Math.sqrt(s2 * ((opts.prediction ? 1 : 0) + lev));
+  const tq = studentTQuantile((1 + level) / 2, result.anova.dfRes);
+  return { value, lower: value - tq * stdError, upper: value + tq * stdError, stdError, level };
 }

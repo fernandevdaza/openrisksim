@@ -2,6 +2,7 @@
  * Descriptive statistics for simulated forecasts (Excel-compatible conventions).
  */
 import type { DescriptiveStats, HistogramBin } from "@openrisksim/core";
+import { studentTQuantile } from "@openrisksim/distributions";
 import { averageRanks, tCritical975 } from "./numeric";
 
 /** Copy of the non-NaN values. */
@@ -145,9 +146,12 @@ function modeOf(sorted: Float64Array): number {
  * Descriptive statistics of the non-NaN values.
  * stdDev/variance are sample (n−1) estimators (Excel STDEV.S/VAR.S; 0 when n = 1); skewness and
  * kurtosis use Excel's SKEW and KURT (excess) formulas (NaN when n < 3 / n < 4 or zero variance);
- * meanCI95 uses Student-t with n−1 degrees of freedom.
+ * meanCI95 uses Student-t with n−1 degrees of freedom; `meanCI` is the same interval at
+ * `opts.confidence` (default 0.95, must be in (0, 1)), reported with `confidenceLevel`.
  */
-export function describe(values: ArrayLike<number>): DescriptiveStats {
+export function describe(values: ArrayLike<number>, opts: { confidence?: number } = {}): DescriptiveStats {
+  const confidenceLevel = opts.confidence ?? 0.95;
+  if (!(confidenceLevel > 0 && confidenceLevel < 1)) throw new RangeError(`describe: confidence ${confidenceLevel} must be in (0, 1)`);
   const s = sortedCopy(values);
   const n = s.length;
   const percentiles: Record<number, number> = {};
@@ -156,6 +160,7 @@ export function describe(values: ArrayLike<number>): DescriptiveStats {
     return {
       count: 0, mean: NaN, median: NaN, mode: NaN, stdDev: NaN, variance: NaN, cv: NaN, min: NaN, max: NaN,
       range: NaN, skewness: NaN, kurtosis: NaN, stdErrorMean: NaN, percentiles, meanCI95: [NaN, NaN],
+      meanCI: [NaN, NaN], confidenceLevel,
     };
   }
 
@@ -194,6 +199,7 @@ export function describe(values: ArrayLike<number>): DescriptiveStats {
 
   const stdErrorMean = stdDev / Math.sqrt(n);
   const half = n > 1 ? tCritical975(n - 1) * stdErrorMean : 0;
+  const halfL = meanCIHalfWidth(stdDev, n, confidenceLevel);
   return {
     count: n,
     mean,
@@ -210,7 +216,20 @@ export function describe(values: ArrayLike<number>): DescriptiveStats {
     stdErrorMean,
     percentiles,
     meanCI95: [mean - half, mean + half],
+    meanCI: [mean - halfL, mean + halfL],
+    confidenceLevel,
   };
+}
+
+/**
+ * Half-width of the Student-t confidence interval of the mean, t_{(1+level)/2, n−1}·s/√n
+ * (0 when n = 1, NaN when n = 0). Uses the same t table as `meanCI95` at level 0.95.
+ */
+export function meanCIHalfWidth(stdDev: number, count: number, level: number): number {
+  if (!(count >= 1)) return NaN;
+  if (count === 1) return 0;
+  const tq = Math.abs(level - 0.95) < 1e-12 ? tCritical975(count - 1) : studentTQuantile((1 + level) / 2, count - 1);
+  return (tq * stdDev) / Math.sqrt(count);
 }
 
 /** Share of the non-NaN values inside [lower, upper] (inclusive). NaN when there are no values. */

@@ -1,5 +1,5 @@
 import { describe as suite, expect, it } from "vitest";
-import { certainty, describe, empiricalCdf, histogram, pearson, percentile, spearman } from "./stats";
+import { certainty, describe, empiricalCdf, histogram, meanCIHalfWidth, pearson, percentile, spearman } from "./stats";
 import { testRng } from "./test-utils";
 
 // Reference values computed with Excel-equivalent formulas (AVERAGE, MEDIAN, STDEV.S, VAR.S, SKEW, KURT,
@@ -110,6 +110,33 @@ suite("describe", () => {
     expect(Math.abs(s.kurtosis)).toBeLessThan(0.1);
     expect(Math.abs(s.percentiles[95] - 1.645)).toBeLessThan(0.03);
     expect(Math.abs(s.mode)).toBeLessThan(0.3);
+  });
+});
+
+suite("describe — confidence level of the mean CI", () => {
+  const sem = 3.564758056306206 / Math.sqrt(12);
+  it("defaults to 95 % and equals meanCI95", () => {
+    const s = describe(DATA);
+    expect(s.confidenceLevel).toBe(0.95);
+    expect(s.meanCI).toEqual(s.meanCI95);
+  });
+  it("uses Student t at the chosen level (df = 11)", () => {
+    // t_{0.95, 11} = 1.795884819, t_{0.995, 11} = 3.105806516
+    const s90 = describe(DATA, { confidence: 0.9 });
+    expect(s90.confidenceLevel).toBe(0.9);
+    expect(s90.meanCI![1] - s90.mean).toBeCloseTo(1.795884819 * sem, 8);
+    expect(s90.meanCI95).toEqual(describe(DATA).meanCI95);
+    const s99 = describe(DATA, { confidence: 0.99 });
+    expect(s99.meanCI![1] - s99.mean).toBeCloseTo(3.105806516 * sem, 8);
+    expect(s99.meanCI![1] - s99.meanCI![0]).toBeGreaterThan(s90.meanCI![1] - s90.meanCI![0]);
+  });
+  it("edge cases and validation", () => {
+    expect(describe([4], { confidence: 0.8 }).meanCI).toEqual([4, 4]);
+    expect(describe([], { confidence: 0.8 }).meanCI![0]).toBeNaN();
+    expect(() => describe(DATA, { confidence: 1 })).toThrow();
+    expect(() => describe(DATA, { confidence: 0 })).toThrow();
+    // large n: t → z
+    expect(meanCIHalfWidth(1, 1_000_001, 0.9)).toBeCloseTo(1.6448536 / 1000, 8);
   });
 });
 

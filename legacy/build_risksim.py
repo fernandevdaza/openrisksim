@@ -1,4 +1,5 @@
 """Genera MiRiskSim.xlsx: simulador Monte Carlo 100% con fórmulas (Excel Mac/Win, LibreOffice, WPS)."""
+import os
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -309,5 +310,5 @@ for col, w in zip("ABCDEF", (36, 16, 14, 14, 12, 14)):
     rs.column_dimensions[col].width = w
 
 wb.move_sheet("Instrucciones", offset=-wb.index(wb["Instrucciones"]))
-wb.save("/Users/fernandev/Coding/myRiskSim/MiRiskSim.xlsx")
+wb.save(os.path.join(os.path.dirname(os.path.abspath(__file__)), "MiRiskSim.xlsx"))
 print("ok")

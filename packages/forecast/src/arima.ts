@@ -9,7 +9,7 @@
  *   φ(B)(1−B)^d with the ML innovation variance.
  */
 import { leastSquares, solve } from "./linalg";
-import { assembleOutput, mean, validateSeries, type ForecastOutput } from "./metrics";
+import { assembleOutput, mean, normalizeLevels, validateSeries, type ForecastOutput, type IntervalOptions } from "./metrics";
 import { nelderMead } from "./optim";
 import { adfTest, difference } from "./tsa";
 
@@ -341,7 +341,7 @@ function aicOf(fit: ArimaFit): number {
   return -2 * fit.logLik + 2 * nParams(fit);
 }
 
-function forecastFit(y: number[], fit: ArimaFit, h: number): ForecastOutput {
+function forecastFit(y: number[], fit: ArimaFit, h: number, levels: number[]): ForecastOutput {
   const { p, d, q } = fit.order;
   const { phi, theta, mu, T } = fit;
   // Forecast the differenced series from the predicted state.
@@ -377,7 +377,7 @@ function forecastFit(y: number[], fit: ArimaFit, h: number): ForecastOutput {
   params.sigma2 = fit.sigma2;
   params.logLik = fit.logLik;
   const k = nParams(fit);
-  const out = assembleOutput("arima", params, y, fitted, fc, sd, k);
+  const out = assembleOutput("arima", params, y, fitted, fc, sd, k, levels);
   const nObs = fit.w.length;
   out.metrics.aic = aicOf(fit);
   out.metrics.bic = -2 * fit.logLik + k * Math.log(nObs);
@@ -388,12 +388,13 @@ function forecastFit(y: number[], fit: ArimaFit, h: number): ForecastOutput {
  * ARIMA(p,d,q) by CSS + exact maximum likelihood; constant (mean) when d = 0, drift when d = 1,
  * none when d ≥ 2. `metrics.aic/bic` are the exact-likelihood criteria.
  */
-export function arima(y: number[], h: number, order: ArimaOrder): ForecastOutput {
+export function arima(y: number[], h: number, order: ArimaOrder, opts: IntervalOptions = {}): ForecastOutput {
+  const levels = normalizeLevels(opts.levels);
   const p = Math.max(0, Math.round(order.p));
   const d = Math.max(0, Math.round(order.d));
   const q = Math.max(0, Math.round(order.q));
   validateSeries(y, p + d + q + 4, "arima");
-  return forecastFit(y, fitArima(y, { p, d, q }), h);
+  return forecastFit(y, fitArima(y, { p, d, q }), h, levels);
 }
 
 /**
@@ -404,8 +405,9 @@ export function arima(y: number[], h: number, order: ArimaOrder): ForecastOutput
 export function autoArima(
   y: number[],
   h: number,
-  opts: { maxP?: number; maxD?: number; maxQ?: number } = {},
+  opts: { maxP?: number; maxD?: number; maxQ?: number } & IntervalOptions = {},
 ): ForecastOutput {
+  const levels = normalizeLevels(opts.levels);
   const maxP = opts.maxP ?? 3;
   const maxQ = opts.maxQ ?? 3;
   const maxD = opts.maxD ?? 2;
@@ -433,5 +435,5 @@ export function autoArima(
   }
   best ??= fallback;
   if (!best) throw new Error("autoArima: no ARIMA model could be estimated");
-  return forecastFit(y, best.fit, h);
+  return forecastFit(y, best.fit, h, levels);
 }

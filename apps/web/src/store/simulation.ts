@@ -1,10 +1,16 @@
 import { create } from "zustand";
 import type { RiskModel, SimulationProgress, SimulationResult } from "@openrisksim/core";
-import { createWorkbookEvaluator, runSimulationInWorker, runSimulationInline } from "@openrisksim/workbook";
+import { createWorkbookEvaluator, runSimulationInWorker, runSimulationInline, type SimulationJob } from "@openrisksim/workbook";
 import { sampleAssumptions } from "@openrisksim/engine";
 import { createRng } from "@openrisksim/distributions";
 import { useWorkbookStore } from "./workbook";
 import { useModelStore } from "./model";
+import { useUiStore } from "./ui";
+
+/** Upper bound for `settings.trials` (memory: trials × (assumptions + forecasts) × 8 bytes, several copies). */
+export const MAX_TRIALS = 5_000_000;
+/** Above this, runs without acceleration get a warning in the settings dialog. */
+export const LARGE_RUN_TRIALS = 200_000;
 
 export type SimStatus = "idle" | "running" | "done" | "error";
 
@@ -35,7 +41,7 @@ function validate(model: RiskModel): string | null {
   if (!useWorkbookStore.getState().engine) return "sim.errNoWorkbook";
   if (model.forecasts.length === 0) return "sim.errNoForecasts";
   if (!model.assumptions.some((a) => a.enabled)) return "sim.errNoAssumptions";
-  if (!(model.settings.trials >= 1)) return "sim.errTrials";
+  if (!(model.settings.trials >= 1) || model.settings.trials > MAX_TRIALS) return "sim.errTrials";
   return null;
 }
 
@@ -79,7 +85,8 @@ export const useSimulationStore = create<SimulationState>()((set, get) => ({
 
     let result: SimulationResult | null = null;
     let usedFallback = false;
-    const job = { workbook: wbStore.snapshot(), model: modelSnapshot };
+    // Acceleration fallback reasons (result.backend) come back in the UI language.
+    const job: SimulationJob = { workbook: wbStore.snapshot(), model: modelSnapshot, locale: useUiStore.getState().locale };
     const progressCb = (p: SimulationProgress) => {
       if (p.type === "progress") onProgress(p.completed, p.total);
     };
@@ -185,3 +192,9 @@ useWorkbookStore.subscribe((s, prev) => {
   if (s.editVersion !== prev.editVersion && useSimulationStore.getState().result) useSimulationStore.setState({ stale: true });
   if (prev.stepEvaluator && !s.stepEvaluator) useSimulationStore.setState({ stepCount: 0 });
 });
+
+// Read-only inspection hook for end-to-end tests / debugging (e.g. `__openrisksim.simulation().result.backend`).
+if (typeof window !== "undefined") {
+  const w = window as unknown as { __openrisksim?: Record<string, unknown> };
+  w.__openrisksim = { ...(w.__openrisksim ?? {}), simulation: () => useSimulationStore.getState() };
+}

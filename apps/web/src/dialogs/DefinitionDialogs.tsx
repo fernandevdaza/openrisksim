@@ -6,6 +6,11 @@ import { useModelStore } from "../store/model";
 import { useWorkbookStore } from "../store/workbook";
 import { useUiStore } from "../store/ui";
 import { actions, guessName } from "../actions";
+import { LEVEL_PRESETS } from "../lib/certainty";
+
+const DEFAULT_CERTAINTY = 0.9;
+const DEFAULT_CONFIDENCE = 0.95;
+const round4 = (v: number) => Math.round(v * 1e4) / 1e4;
 
 function Title({ color, text, cell }: { color: string; text: string; cell: CellRef }) {
   return (
@@ -22,6 +27,12 @@ export function ForecastDialog({ cell, id, onClose }: { cell: CellRef; id?: stri
   const engine = useWorkbookStore((s) => s.engine);
   const [name, setName] = useState(existing?.name ?? guessName(cell));
   const [format, setFormat] = useState<NonNullable<ForecastDef["format"]>>(existing?.format ?? "number");
+  // both kept as percentages in the form (90 ⇒ 0.9)
+  const [certaintyPct, setCertaintyPct] = useState(round4((existing?.certainty ?? DEFAULT_CERTAINTY) * 100));
+  const [confidencePct, setConfidencePct] = useState(round4((existing?.confidence ?? DEFAULT_CONFIDENCE) * 100));
+  const certaintyError = !(certaintyPct > 0 && certaintyPct < 100) ? t("forecast.certaintyError") : null;
+  const confidenceError = !(confidencePct >= 50 && confidencePct <= 99.9) ? t("forecast.confidenceError") : null;
+  const invalid = !!certaintyError || !!confidenceError;
   const isFormula = useMemo(() => actions.isFormulaCell(cell), [cell]);
   const value = useMemo(() => {
     try {
@@ -31,8 +42,18 @@ export function ForecastDialog({ cell, id, onClose }: { cell: CellRef; id?: stri
     }
   }, [engine, cell]);
   const save = () => {
-    if (!name.trim()) return;
-    useModelStore.getState().upsertForecast({ id: existing?.id ?? newId("f"), name: name.trim(), cell, format });
+    if (!name.trim() || invalid) return;
+    const certainty = round4(certaintyPct / 100);
+    const confidence = round4(confidencePct / 100);
+    useModelStore.getState().upsertForecast({
+      id: existing?.id ?? newId("f"),
+      name: name.trim(),
+      cell,
+      format,
+      // defaults are not stored, so models saved before this option existed stay unchanged
+      certainty: certainty === DEFAULT_CERTAINTY ? undefined : certainty,
+      confidence: confidence === DEFAULT_CONFIDENCE ? undefined : confidence,
+    });
     useUiStore.getState().notify(t("forecast.saved", { name: name.trim() }), "success");
     onClose();
   };
@@ -57,7 +78,7 @@ export function ForecastDialog({ cell, id, onClose }: { cell: CellRef; id?: stri
             </Button>
           )}
           <Button onClick={onClose}>{t("common.cancel")}</Button>
-          <Button variant="primary" onClick={save} disabled={!name.trim()}>
+          <Button variant="primary" onClick={save} disabled={!name.trim() || invalid}>
             {t("common.ok")}
           </Button>
         </>
@@ -84,6 +105,24 @@ export function ForecastDialog({ cell, id, onClose }: { cell: CellRef; id?: stri
             ]}
           />
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1 text-sm">
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-slate-700 dark:text-slate-300">{t("forecast.certainty")}</span>
+              <NumberInput value={certaintyPct} onChange={setCertaintyPct} min={1} max={99.9} />
+            </label>
+            <PresetChips value={certaintyPct} onPick={setCertaintyPct} label={t("forecast.certainty")} />
+            <span className={certaintyError ? "text-xs text-red-600" : "text-xs text-slate-500"}>{certaintyError ?? t("forecast.certaintyHint")}</span>
+          </div>
+          <div className="flex flex-col gap-1 text-sm">
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-slate-700 dark:text-slate-300">{t("forecast.confidence")}</span>
+              <NumberInput value={confidencePct} onChange={setConfidencePct} min={50} max={99.9} />
+            </label>
+            <PresetChips value={confidencePct} onPick={setConfidencePct} label={t("forecast.confidence")} />
+            <span className={confidenceError ? "text-xs text-red-600" : "text-xs text-slate-500"}>{confidenceError ?? t("forecast.confidenceHint")}</span>
+          </div>
+        </div>
         <div className="text-xs text-slate-500 dark:text-slate-400">
           {t("forecast.currentValue")}: <span className="font-mono">{value == null ? "—" : typeof value === "object" ? value.error : String(value)}</span>
         </div>
@@ -91,6 +130,29 @@ export function ForecastDialog({ cell, id, onClose }: { cell: CellRef; id?: stri
         <button type="submit" hidden />
       </form>
     </Modal>
+  );
+}
+
+/** Quick 80/90/95/99 % buttons under a percentage input. */
+function PresetChips({ value, onPick, label }: { value: number; onPick: (pct: number) => void; label: string }) {
+  return (
+    <div className="flex gap-1" role="group" aria-label={label}>
+      {LEVEL_PRESETS.map((p) => {
+        const pct = Math.round(p * 100);
+        const on = Math.abs(value - pct) < 1e-9;
+        return (
+          <button
+            key={p}
+            type="button"
+            aria-pressed={on}
+            className={`rounded-full border px-1.5 py-0 text-[11px] tabular-nums ${on ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"}`}
+            onClick={() => onPick(pct)}
+          >
+            {pct}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

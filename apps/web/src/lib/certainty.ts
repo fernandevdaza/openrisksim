@@ -2,6 +2,7 @@
  * Certainty-level helpers for forecast charts (Risk Simulator's Two-Tail / Left-Tail / Right-Tail).
  * All functions take an ascending, NaN-free array.
  */
+import { studentTQuantile } from "@openrisksim/distributions";
 
 export type TailMode = "two" | "left" | "right";
 
@@ -101,4 +102,58 @@ export function withBound(sorted: ArrayLike<number>, state: CertaintyState, whic
 export function withCertainty(sorted: ArrayLike<number>, state: CertaintyState, certainty: number): CertaintyState {
   const c = Math.min(1, Math.max(0, certainty));
   return { mode: state.mode, ...boundsFromCertainty(sorted, state.mode, c), certainty: c };
+}
+
+// ---- confidence levels ---------------------------------------------------------------------------
+
+/** Quick presets offered wherever a confidence / certainty level is chosen. */
+export const LEVEL_PRESETS = [0.8, 0.9, 0.95, 0.99] as const;
+export const MIN_CONFIDENCE = 0.5;
+export const MAX_CONFIDENCE = 0.999;
+
+/**
+ * Parses a level typed by the user: "90", "97,5", "97.5 %", "0,9" → fraction (0.9, 0.975…).
+ * Values ≤ 1 are taken as fractions, larger ones as percentages. NaN when not a number or
+ * outside [min, max] (default [0.5, 0.999]).
+ */
+export function parseLevelInput(raw: string, min = MIN_CONFIDENCE, max = MAX_CONFIDENCE): number {
+  let s = raw.trim().replace(/\s|%/g, "");
+  if (!s) return NaN;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) s = lastComma > lastDot ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  else if (lastComma >= 0) s = s.replace(",", ".");
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)$/.test(s)) return NaN;
+  const v = Number(s);
+  const level = v <= 1 ? v : v / 100;
+  if (!(level >= min - 1e-12 && level <= max + 1e-12)) return NaN;
+  return Math.round(level * 1e6) / 1e6;
+}
+
+/** 0.975 → "97,5" (es) / "97.5" (en): the level as a percentage number, up to 1 decimal. */
+export function levelNumber(level: number, locale: "es" | "en"): string {
+  return (Math.round(level * 1000) / 10).toLocaleString(locale === "es" ? "es-ES" : "en-US", { maximumFractionDigits: 1 });
+}
+
+/** 0.9 → "90 %" (es) / "90%" (en). */
+export function levelPct(level: number, locale: "es" | "en"): string {
+  return locale === "es" ? `${levelNumber(level, locale)} %` : `${levelNumber(level, locale)}%`;
+}
+
+/**
+ * Student-t confidence interval of the mean at `level` from the summary statistics
+ * (mean ± t_{(1+level)/2, n−1}·s/√n). Reuses the engine's `meanCI95` at 95 % and `meanCI`
+ * when it was computed at the same level, so the numbers always match the engine's.
+ */
+export function meanConfidenceInterval(
+  stats: { mean: number; stdDev: number; count: number; meanCI95?: [number, number]; meanCI?: [number, number]; confidenceLevel?: number },
+  level: number,
+): [number, number] {
+  if (Math.abs(level - 0.95) < 1e-9 && stats.meanCI95) return stats.meanCI95;
+  if (stats.meanCI && stats.confidenceLevel !== undefined && Math.abs(stats.confidenceLevel - level) < 1e-9) return stats.meanCI;
+  const n = stats.count;
+  if (!(n >= 1) || !Number.isFinite(stats.mean)) return [NaN, NaN];
+  if (n === 1) return [stats.mean, stats.mean];
+  const half = (studentTQuantile((1 + level) / 2, n - 1) * stats.stdDev) / Math.sqrt(n);
+  return [stats.mean - half, stats.mean + half];
 }

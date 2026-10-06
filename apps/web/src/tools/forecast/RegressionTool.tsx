@@ -2,7 +2,7 @@
  * Multiple linear regression (optionally stepwise) with coefficient table, ANOVA, VIF,
  * Durbin–Watson and residual plots.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Plus, Trash2 } from "lucide-react";
 import { multipleRegression, stepwiseRegression, type RegressionResult } from "@openrisksim/forecast";
 import { histogram } from "@openrisksim/engine";
@@ -14,6 +14,8 @@ import { fmt, fmtAuto, fmtP, fmtPEq } from "../common/format";
 import { histogramOption, scatterOption } from "../common/charts";
 import { hstackColumns } from "../common/parse";
 import { ToolError } from "../common/workbook";
+import { levelNumber } from "../../lib/certainty";
+import { ConfidenceLevels } from "./ConfidenceLevels";
 
 type HeaderMode = "auto" | "yes" | "no";
 type PlotTab = "resFit" | "actFit" | "resHist" | "resOrder";
@@ -36,6 +38,7 @@ export default function RegressionTool(_props: { onClose(): void }) {
   const [stepwise, setStepwise] = useState(false);
   const [pEnter, setPEnter] = useState(0.05);
   const [pRemove, setPRemove] = useState(0.1);
+  const [confidence, setConfidence] = useState(0.95);
   const [res, setRes] = useState<Res | null>(null);
   const [tab, setTab] = useState<PlotTab>("resFit");
   const [error, setError] = useState<unknown>(null);
@@ -56,7 +59,7 @@ export default function RegressionTool(_props: { onClose(): void }) {
       const k = xCols.length + (intercept ? 1 : 0);
       if (n <= k + 1) throw new ToolError("regression.errors.tooFew", { n, k });
       const X = y.map((_, i) => xCols.map((c) => c[i]));
-      const r = stepwise ? stepwiseRegression(y, X, xNames, { pEnter, pRemove }) : multipleRegression(y, X, xNames, { intercept });
+      const r = stepwise ? stepwiseRegression(y, X, xNames, { pEnter, pRemove, confidence }) : multipleRegression(y, X, xNames, { intercept, confidence });
       setRes({ r, yName: cols.names[0], xNames, y, dropped: cols.dropped, stepwise });
     } catch (e) {
       setRes(null);
@@ -64,7 +67,19 @@ export default function RegressionTool(_props: { onClose(): void }) {
     }
   };
 
+  // Changing the confidence level after a run re-estimates with the same inputs.
+  const firstConf = useRef(true);
+  useEffect(() => {
+    if (firstConf.current) {
+      firstConf.current = false;
+      return;
+    }
+    if (res) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confidence]);
+
   const r = res?.r;
+  const lvl = levelNumber(r?.confidenceLevel ?? confidence, locale);
   const coefName = (n: string) => (n === "Intercept" ? t("regression.interceptName") : n);
   // VIF array is per regressor (no intercept)
   const vifFor = (i: number): number | null => {
@@ -142,6 +157,7 @@ export default function RegressionTool(_props: { onClose(): void }) {
           <NumField label={t("regression.pRemove")} value={pRemove} min={0.001} max={0.5} onChange={setPRemove} />
         </div>
       )}
+      <ConfidenceLevels single value={[confidence]} onChange={(l) => setConfidence(l[0] ?? 0.95)} hint={t("regression.confidenceHint")} />
       <Button variant="primary" onClick={run}>
         <Play size={14} />
         {t("regression.run")}
@@ -178,7 +194,10 @@ export default function RegressionTool(_props: { onClose(): void }) {
               <p>{t("regression.interpR2", { r2: fmt(r.r2 * 100, 1, locale) })}</p>
               <p>{r.fPValue < 0.05 ? t("regression.fSig", { p: fmtPEq(r.fPValue, locale) }) : t("regression.fNotSig", { p: fmtPEq(r.fPValue, locale) })}</p>
               {significant.map((c) => (
-                <p key={c.name}>{t("regression.interpCoef", { name: c.name, y: res.yName, b: fmtAuto(Math.abs(c.value), locale), dir: c.value >= 0 ? t("regression.increases") : t("regression.decreases") })}</p>
+                <p key={c.name}>
+                  {t("regression.interpCoef", { name: c.name, y: res.yName, b: fmtAuto(Math.abs(c.value), locale), dir: c.value >= 0 ? t("regression.increases") : t("regression.decreases") })}{" "}
+                  {t("regression.interpCi", { level: lvl, name: c.name, lo: fmtAuto(c.ci[0], locale), hi: fmtAuto(c.ci[1], locale) })}
+                </p>
               ))}
               <p>{dw < 1.5 || dw > 2.5 ? t("regression.dwBad") : t("regression.dwOk")}</p>
               {highVif && <p>{t("regression.vifBad")}</p>}
@@ -191,8 +210,8 @@ export default function RegressionTool(_props: { onClose(): void }) {
                   build={() => [
                     [equation],
                     [],
-                    [t("regression.variable"), t("regression.coef"), t("regression.stdError"), "t", t("regression.pValue"), t("regression.ciLow"), t("regression.ciHigh"), "VIF"],
-                    ...r.coefficients.map((c, i) => [coefName(c.name), c.value, c.stdError, c.t, c.pValue, c.ci95[0], c.ci95[1], vifFor(i)]),
+                    [t("regression.variable"), t("regression.coef"), t("regression.stdError"), "t", t("regression.pValue"), t("regression.ciLowLevel", { level: lvl }), t("regression.ciHighLevel", { level: lvl }), "VIF"],
+                    ...r.coefficients.map((c, i) => [coefName(c.name), c.value, c.stdError, c.t, c.pValue, c.ci[0], c.ci[1], vifFor(i)]),
                     [],
                     ["R²", r.r2],
                     [t("regression.adjR2"), r.adjR2],
@@ -215,7 +234,7 @@ export default function RegressionTool(_props: { onClose(): void }) {
                   { key: "se", label: t("regression.stdError"), align: "right", format: (v) => fmtAuto(v as number, locale) },
                   { key: "t", label: "t", align: "right", format: (v) => fmt(v as number, 3, locale) },
                   { key: "p", label: t("regression.pValue"), align: "right", format: (v) => `${fmtP(v as number, locale)}${(v as number) < 0.05 ? " *" : ""}` },
-                  { key: "ci", label: t("regression.ci95"), align: "right" },
+                  { key: "ci", label: t("regression.ciLevel", { level: lvl }), align: "right" },
                   { key: "vif", label: "VIF", align: "right", format: (v) => (v == null ? "—" : `${fmt(v as number, 2, locale)}${(v as number) > 10 ? " ⚠" : ""}`) },
                 ]}
                 rows={r.coefficients.map((c, i) => ({
@@ -224,7 +243,7 @@ export default function RegressionTool(_props: { onClose(): void }) {
                   se: c.stdError,
                   t: c.t,
                   p: c.pValue,
-                  ci: `[${fmtAuto(c.ci95[0], locale)} ; ${fmtAuto(c.ci95[1], locale)}]`,
+                  ci: `[${fmtAuto(c.ci[0], locale)} ; ${fmtAuto(c.ci[1], locale)}]`,
                   vif: vifFor(i),
                 }))}
               />

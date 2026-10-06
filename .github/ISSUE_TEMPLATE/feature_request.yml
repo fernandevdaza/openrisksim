@@ -1,0 +1,27 @@
+name: "✨ Idea / Feature request"
+description: "Propón una función, distribución o herramienta nueva · Suggest a new feature, distribution or tool"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "¿Qué necesitas hacer? · What do you need to do?"
+      description: "Describe el caso de uso (p. ej. una tarea de tu curso). · Describe the use case (e.g. a course assignment)."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Propuesta · Proposal"
+      description: "Cómo te gustaría que funcione. Si existe en Risk Simulator / @RISK / Crystal Ball, cuéntanos cómo funciona allí. · How it should work; if it exists in Risk Simulator / @RISK / Crystal Ball, describe it."
+  - type: textarea
+    id: references
+    attributes:
+      label: "Referencias · References"
+      description: "Fórmulas, papers, libros o ejemplos con resultados conocidos. · Formulas, papers, textbooks or worked examples."
+  - type: checkboxes
+    id: help
+    attributes:
+      label: "¿Quieres ayudar? · Want to help?"
+      options:
+        - label: "Me gustaría implementarlo con un pull request · I'd like to implement it in a pull request"

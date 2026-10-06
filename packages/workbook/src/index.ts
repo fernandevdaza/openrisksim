@@ -14,6 +14,24 @@ export { createWorkbookEvaluator } from "./evaluator";
 export type { WorkbookEvaluator } from "./evaluator";
 
 export { runSimulationInWorker, runSimulationInline, decisionOverrides } from "./runInWorker";
+export {
+  runAcceleratedSimulation,
+  detectAccelerationCapabilities,
+  chooseAccelerationMode,
+  resolveWorkerCount,
+  hardwareThreads,
+  gpuDeviceLabel,
+  validateOutputs,
+  reasonsText,
+  ACCEL_MESSAGES,
+  AUTO_GPU_MIN_TRIALS,
+  AUTO_MULTICORE_MIN_TRIALS,
+  VALIDATION_TRIALS,
+  MAX_WORKERS,
+} from "./acceleration";
+export type { AccelerationCapabilities, AccelerationEnv, AccelerationPlanInput, AccelReason, BackendMode, Bilingual } from "./acceleration";
+export { inlinePoolFactory, webWorkerPoolFactory, poolBatchEvaluator, defaultWorkerCount } from "./pool";
+export type { ChunkWorker, PoolFactory, PoolInit } from "./pool";
 export type { WorkerRequest, WorkerResponse } from "./worker";
 
 export { buildSimulationReport, distributionLabel, distributionParamsText } from "./report";

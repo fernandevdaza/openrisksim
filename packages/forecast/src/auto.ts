@@ -2,13 +2,13 @@
  * Automatic method selection by holdout RMSE.
  */
 import { autoArima } from "./arima";
-import { validateSeries, type ForecastOutput } from "./metrics";
+import { normalizeLevels, validateSeries, type ForecastOutput, type IntervalOptions } from "./metrics";
 import { holt, holtWinters, movingAverage, simpleExponentialSmoothing } from "./smoothing";
 import { trendForecast } from "./trend";
 
 interface Candidate {
   label: string;
-  fit: (y: number[], h: number) => ForecastOutput;
+  fit: (y: number[], h: number, levels?: number[]) => ForecastOutput;
   minLength: number;
 }
 
@@ -28,25 +28,27 @@ export function autoForecast(
   y: number[],
   h: number,
   period?: number,
+  opts: IntervalOptions = {},
 ): { best: ForecastOutput; ranking: { method: string; rmse: number; aic?: number }[] } {
   validateSeries(y, 4, "autoForecast");
+  const levels = normalizeLevels(opts.levels);
   const n = y.length;
   const m = period && period >= 2 ? Math.round(period) : 0;
   const window = m || 3;
   const candidates: Candidate[] = [
-    { label: "movingAverage", fit: (s, k) => movingAverage(s, k, window), minLength: window + 2 },
-    { label: "ses", fit: (s, k) => simpleExponentialSmoothing(s, k), minLength: 3 },
-    { label: "holt", fit: (s, k) => holt(s, k), minLength: 4 },
-    { label: "holtDamped", fit: (s, k) => holt(s, k, { damped: true }), minLength: 5 },
-    { label: "arima", fit: (s, k) => autoArima(s, k), minLength: 10 },
-    { label: "trend:linear", fit: (s, k) => trendForecast(s, k, "linear"), minLength: 4 },
+    { label: "movingAverage", fit: (s, k, lv) => movingAverage(s, k, window, { levels: lv }), minLength: window + 2 },
+    { label: "ses", fit: (s, k, lv) => simpleExponentialSmoothing(s, k, undefined, { levels: lv }), minLength: 3 },
+    { label: "holt", fit: (s, k, lv) => holt(s, k, { levels: lv }), minLength: 4 },
+    { label: "holtDamped", fit: (s, k, lv) => holt(s, k, { damped: true, levels: lv }), minLength: 5 },
+    { label: "arima", fit: (s, k, lv) => autoArima(s, k, { levels: lv }), minLength: 10 },
+    { label: "trend:linear", fit: (s, k, lv) => trendForecast(s, k, "linear", { levels: lv }), minLength: 4 },
   ];
   if (m) {
-    candidates.push({ label: "holtWintersAdditive", fit: (s, k) => holtWinters(s, k, m), minLength: 2 * m });
+    candidates.push({ label: "holtWintersAdditive", fit: (s, k, lv) => holtWinters(s, k, m, { levels: lv }), minLength: 2 * m });
     if (y.every((v) => v > 0))
       candidates.push({
         label: "holtWintersMultiplicative",
-        fit: (s, k) => holtWinters(s, k, m, { seasonal: "multiplicative" }),
+        fit: (s, k, lv) => holtWinters(s, k, m, { seasonal: "multiplicative", levels: lv }),
         minLength: 2 * m,
       });
   }
@@ -77,7 +79,7 @@ export function autoForecast(
   scored.sort((a, b) => a.rmse - b.rmse);
   for (const s of scored) {
     try {
-      const best = s.cand.fit(y, h);
+      const best = s.cand.fit(y, h, levels);
       return { best, ranking: scored.map(({ method, rmse, aic }) => ({ method, rmse, aic })) };
     } catch {
       /* try the next one */

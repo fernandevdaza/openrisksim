@@ -8,6 +8,7 @@ import { actions } from "../actions";
 import { sortedFinite } from "../lib/certainty";
 import { ForecastWindow } from "./ForecastWindow";
 import { overlayOption } from "./charts";
+import { BackendBadge } from "./BackendBadge";
 
 /** Right dock with one tab per forecast window + overlay chart. */
 export function ResultsDock() {
@@ -19,6 +20,7 @@ export function ResultsDock() {
   const resultModel = useSimulationStore((s) => s.resultModel);
   const stale = useSimulationStore((s) => s.stale);
   const status = useSimulationStore((s) => s.status);
+  const locale = useUiStore((s) => s.locale);
   const forecasts = useMemo(() => (resultModel?.forecasts ?? []).filter((f) => result?.forecasts[f.id]), [result, resultModel]);
 
   if (!open) return null;
@@ -46,6 +48,14 @@ export function ResultsDock() {
       <div className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-blue-400/30" onMouseDown={onResize} aria-hidden />
       <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-100 px-2 py-1 dark:border-slate-700 dark:bg-slate-800">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{t("results.title")}</span>
+        {result?.backend && (
+          <span className="ml-2 flex min-w-0 items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300" data-testid="run-summary">
+            <span className="shrink-0 tabular-nums">
+              {t("results.trialsN", { n: result.trials.toLocaleString(locale) })} · {(result.elapsedMs / 1000).toFixed(2)} s ·
+            </span>{" "}
+            <BackendBadge backend={result.backend} showRate={false} />
+          </span>
+        )}
         <button className="ml-auto rounded p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700" aria-label={t("common.close")} onClick={() => useUiStore.getState().setResultsOpen(false)}>
           <X size={14} />
         </button>

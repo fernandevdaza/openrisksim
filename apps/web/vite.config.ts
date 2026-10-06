@@ -10,7 +10,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      workbox: { maximumFileSizeToCacheInBytes: 12 * 1024 * 1024 },
+      workbox: {
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        // the documentation site is published under ./docs/ — never answer it with the app shell
+        navigateFallbackDenylist: [/\/docs(\/|$)/],
+      },
       manifest: {
         name: "OpenRiskSim",
         short_name: "OpenRiskSim",
@@ -18,7 +22,11 @@ export default defineConfig({
         theme_color: "#1f3864",
         background_color: "#ffffff",
         display: "standalone",
-        icons: [{ src: "icon.svg", sizes: "any", type: "image/svg+xml" }],
+        icons: [
+          { src: "icon.svg", sizes: "any", type: "image/svg+xml" },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+        ],
       },
     }),
   ],

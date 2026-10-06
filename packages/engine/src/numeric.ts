@@ -74,10 +74,70 @@ export function tCritical975(df: number): number {
 /** Indices that sort `v` ascending (stable for ties). */
 export function argsort(v: ArrayLike<number>): Uint32Array {
   const n = v.length;
+  if (n >= RADIX_MIN) {
+    const r = radixArgsort(v);
+    if (r) return r;
+  }
   const idx = new Uint32Array(n);
   for (let i = 0; i < n; i++) idx[i] = i;
   idx.sort((a, b) => v[a] - v[b] || a - b);
   return idx;
+}
+
+const RADIX_MIN = 4096;
+
+/**
+ * Stable LSD radix argsort on the IEEE-754 bit pattern (4 passes of 16 bits): ~10× faster than a
+ * comparator sort for 10⁶ values. Same order as `argsort`'s comparator (−0 is treated as +0).
+ * Returns null when `v` contains NaN (the comparator's order is then implementation-defined).
+ */
+function radixArgsort(v: ArrayLike<number>): Uint32Array | null {
+  const n = v.length;
+  const hi = new Uint32Array(n);
+  const lo = new Uint32Array(n);
+  const f = new Float64Array(1);
+  const u = new Uint32Array(f.buffer);
+  for (let i = 0; i < n; i++) {
+    const x = v[i];
+    if (x !== x) return null;
+    f[0] = x + 0; // −0 → +0
+    let h = u[1];
+    let l = u[0];
+    if (h & 0x80000000) {
+      h = ~h >>> 0;
+      l = ~l >>> 0;
+    } else h = (h | 0x80000000) >>> 0;
+    hi[i] = h;
+    lo[i] = l;
+  }
+  let a = new Uint32Array(n);
+  let b = new Uint32Array(n);
+  for (let i = 0; i < n; i++) a[i] = i;
+  const cnt = new Uint32Array(65536);
+  const passes: [Uint32Array, number][] = [
+    [lo, 0],
+    [lo, 16],
+    [hi, 0],
+    [hi, 16],
+  ];
+  for (const [key, sh] of passes) {
+    cnt.fill(0);
+    for (let i = 0; i < n; i++) cnt[(key[i] >>> sh) & 0xffff]++;
+    let s = 0;
+    for (let k = 0; k < 65536; k++) {
+      const c = cnt[k];
+      cnt[k] = s;
+      s += c;
+    }
+    for (let i = 0; i < n; i++) {
+      const id = a[i];
+      b[cnt[(key[id] >>> sh) & 0xffff]++] = id;
+    }
+    const t = a;
+    a = b;
+    b = t;
+  }
+  return a;
 }
 
 /** Ranks 1..n with ties receiving the average of the ranks they span. Input must not contain NaN. */

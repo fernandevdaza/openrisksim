@@ -76,6 +76,29 @@ describe("option builders", () => {
     expect(s.find((x) => x.name === "f")!.data[0]).toBeNull();
   });
 
+  it("forecast bands for arbitrary levels: widest first, more transparent, legend inner→outer", () => {
+    const o = forecastBandOption({
+      actual: [1, 2],
+      fitted: [1, 2],
+      forecast: [3],
+      bands: [
+        { level: 0.9, lower: [2], upper: [4], label: "90" },
+        { level: 0.99, lower: [1], upper: [5], label: "99" },
+        { level: 0.8, lower: [2.5], upper: [3.5], label: "80" },
+      ],
+      labels: { actual: "a", fitted: "f", forecast: "fc", period: "t" },
+      locale: "es",
+    });
+    const s = seriesOf(o) as unknown as { name: string; data: unknown[]; areaStyle?: { opacity: number } }[];
+    const areas = s.filter((x) => x.areaStyle);
+    expect(areas.map((x) => x.name)).toEqual(["99", "90", "80"]);
+    expect(areas[0].areaStyle!.opacity).toBeLessThan(areas[1].areaStyle!.opacity);
+    expect(areas[1].areaStyle!.opacity).toBeLessThan(areas[2].areaStyle!.opacity);
+    expect(areas[0].data).toEqual([null, null, 4]);
+    const legend = (o as { legend: { data: (string | { name: string })[] } }).legend.data;
+    expect(legend.map((d) => (typeof d === "string" ? d : d.name))).toEqual(["a", "f", "fc", "80", "90", "99"]);
+  });
+
   it("fan chart, lines, bars and NPV profile build", () => {
     const fan = fanChartOption({
       x: ["0", "1"],

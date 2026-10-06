@@ -1,12 +1,12 @@
-export { errorMetrics } from "./metrics";
-export type { ErrorMetrics, ForecastOutput } from "./metrics";
+export { errorMetrics, normalizeLevels, DEFAULT_LEVELS } from "./metrics";
+export type { ErrorMetrics, ForecastOutput, IntervalOptions, PredictionInterval } from "./metrics";
 export { movingAverage, simpleExponentialSmoothing, holt, holtWinters } from "./smoothing";
 export { arima, autoArima } from "./arima";
 export type { ArimaOrder } from "./arima";
 export { autoForecast } from "./auto";
 export { trendForecast } from "./trend";
 export type { TrendKind } from "./trend";
-export { multipleRegression, stepwiseRegression } from "./regression";
-export type { RegressionResult } from "./regression";
-export { geometricBrownianMotion, meanReversion, jumpDiffusion, estimateGbm } from "./stochastic";
+export { multipleRegression, stepwiseRegression, predict } from "./regression";
+export type { RegressionResult, RegressionCoefficient } from "./regression";
+export { geometricBrownianMotion, meanReversion, jumpDiffusion, estimateGbm, pathPercentileBands } from "./stochastic";
 export { acf, pacf, decompose, seasonalityTest, ljungBox, adfTest, difference } from "./tsa";

@@ -6,10 +6,15 @@ import { Crosshair, Download } from "lucide-react";
 import type { ForecastDef, ForecastResult } from "@openrisksim/core";
 import { Chart, NumberInput, Select, Tabs, Table, clsx } from "../components/ui";
 import { useSimulationStore } from "../store/simulation";
+import { useModelStore } from "../store/model";
 import { useUiStore } from "../store/ui";
 import {
+  LEVEL_PRESETS,
   certaintyFromBounds,
   defaultCertainty,
+  levelNumber,
+  levelPct,
+  meanConfidenceInterval,
   sortedFinite,
   switchMode,
   withBound,
@@ -38,8 +43,11 @@ export function ForecastWindow({ forecastId }: { forecastId: string }) {
   const result = useSimulationStore((s) => s.result);
   const resultModel = useSimulationStore((s) => s.resultModel);
   const fr = result?.forecasts[forecastId];
-  const def = resultModel?.forecasts.find((f) => f.id === forecastId);
-  if (!fr || !def) return <div className="p-4 text-sm text-slate-500">{t("results.noData")}</div>;
+  const snapshot = resultModel?.forecasts.find((f) => f.id === forecastId);
+  // certainty/confidence follow the live definition, so editing the forecast after a run applies at once
+  const live = useModelStore((s) => s.model.forecasts.find((f) => f.id === forecastId));
+  if (!fr || !snapshot) return <div className="p-4 text-sm text-slate-500">{t("results.noData")}</div>;
+  const def: ForecastDef = live ? { ...snapshot, certainty: live.certainty, confidence: live.confidence } : snapshot;
   return <ForecastView fr={fr} def={def} />;
 }
 
@@ -52,8 +60,19 @@ function ForecastView({ fr, def }: { fr: ForecastResult; def: ForecastDef }) {
   const sorted = useMemo(() => sortedFinite(fr.values), [fr]);
   const bins = useMemo(() => computeBins(sorted), [sorted]);
   const stored = useCertaintyStore((s) => s.states[fr.forecastId]);
-  const state = stored ?? defaultCertainty(sorted);
+  const initialCertainty = def.certainty ?? 0.9;
+  const confidence = def.confidence ?? 0.95;
+  const state = stored ?? defaultCertainty(sorted, "two", initialCertainty);
   const setState = (s: CertaintyState) => useCertaintyStore.getState().set(fr.forecastId, s);
+  // a new initial certainty in the forecast definition resets the band (keeping the tail type)
+  const prevInitial = useRef(initialCertainty);
+  useEffect(() => {
+    if (prevInitial.current === initialCertainty) return;
+    prevInitial.current = initialCertainty;
+    const cur = useCertaintyStore.getState().states[fr.forecastId];
+    if (cur) setState(withCertainty(sorted, cur, initialCertainty));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCertainty]);
   const kind = def.format;
   const fmt = (v: number) => formatStat(v, locale, kind);
 
@@ -235,17 +254,20 @@ function ForecastView({ fr, def }: { fr: ForecastResult; def: ForecastDef }) {
             <QuickStats fr={fr} kind={kind} sorted={sorted} />
           </div>
         )}
-        {tab === "stats" && <StatsTable fr={fr} kind={kind} sorted={sorted} />}
+        {tab === "stats" && <StatsTable fr={fr} kind={kind} sorted={sorted} confidence={confidence} />}
         {tab === "pct" && <PercentilesTable fr={fr} kind={kind} />}
       </div>
     </div>
   );
 }
 
+const CHEVRON = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5l3 3 3-3' fill='none' stroke='%2364748b' stroke-width='1.5'/%3E%3C/svg%3E")`;
+
 function CertaintyControls({ state, sorted, onChange }: { state: CertaintyState; sorted: Float64Array; onChange: (s: CertaintyState) => void }) {
   const { t } = useTranslation();
+  const locale = useUiStore((s) => s.locale);
   return (
-    <div className="grid grid-cols-[auto_1fr_1fr_0.8fr] items-end gap-2 text-xs">
+    <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-end gap-2 text-xs">
       <label className="flex flex-col gap-0.5">
         <span className="text-slate-600 dark:text-slate-400">{t("results.tail")}</span>
         <Select<TailMode>
@@ -277,18 +299,40 @@ function CertaintyControls({ state, sorted, onChange }: { state: CertaintyState;
           onChange={(v) => onChange(withBound(sorted, state, "upper", v))}
         />
       </label>
-      <label className="flex flex-col gap-0.5">
-        <span className="text-slate-600 dark:text-slate-400">{t("results.certaintyPct")}</span>
-        <NumberInput
-          className="!py-0.5 !text-xs font-semibold"
-          min={0}
-          max={100}
-          value={Math.round(state.certainty * 1e4) / 100}
-          onChange={(v) => {
-            if (v >= 0 && v <= 100) onChange(withCertainty(sorted, state, v / 100));
+      <div className="flex items-end gap-1">
+        <label className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-slate-600 dark:text-slate-400">{t("results.certaintyPct")}</span>
+          <NumberInput
+            className="!py-0.5 !text-xs font-semibold"
+            min={0}
+            max={100}
+            value={Math.round(state.certainty * 1e4) / 100}
+            onChange={(v) => {
+              if (v >= 0 && v <= 100) onChange(withCertainty(sorted, state, v / 100));
+            }}
+          />
+        </label>
+        <select
+          className="h-[26px] w-7 shrink-0 cursor-pointer appearance-none rounded border border-slate-300 bg-white bg-[length:10px] bg-center bg-no-repeat text-center text-[11px] text-transparent dark:border-slate-600 dark:bg-slate-800"
+          style={{ backgroundImage: CHEVRON }}
+          aria-label={t("results.certaintyPresets")}
+          title={t("results.certaintyPresets")}
+          value=""
+          onChange={(e) => {
+            const p = Number(e.target.value);
+            if (p > 0 && p < 1) onChange(withCertainty(sorted, state, p));
           }}
-        />
-      </label>
+        >
+          <option value="" disabled hidden>
+            ▾
+          </option>
+          {LEVEL_PRESETS.map((p) => (
+            <option key={p} value={p} className="text-slate-900 dark:text-slate-100">
+              {levelPct(p, locale)}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
@@ -331,8 +375,16 @@ function QuickStats({ fr, kind, sorted }: { fr: ForecastResult; kind: ForecastDe
   );
 }
 
-export function statsRows(fr: ForecastResult, kind: ForecastDef["format"], sorted: Float64Array, locale: "es" | "en", t: (k: string) => string): { k: string; v: string }[] {
+export function statsRows(
+  fr: ForecastResult,
+  kind: ForecastDef["format"],
+  sorted: Float64Array,
+  locale: "es" | "en",
+  t: (k: string, o?: Record<string, unknown>) => string,
+  confidence = 0.95,
+): { k: string; v: string }[] {
   const s = fr.stats;
+  const ci = meanConfidenceInterval(s, confidence);
   const f = (v: number) => formatStat(v, locale, kind);
   const n = (v: number, d = 4) => formatStat(v, locale, "number", d);
   return [
@@ -349,7 +401,7 @@ export function statsRows(fr: ForecastResult, kind: ForecastDef["format"], sorte
     { k: t("stats.skewness"), v: n(s.skewness) },
     { k: t("stats.kurtosis"), v: n(s.kurtosis) },
     { k: t("stats.stdErrorMean"), v: f(s.stdErrorMean) },
-    { k: t("stats.meanCI95"), v: `[${f(s.meanCI95[0])}; ${f(s.meanCI95[1])}]` },
+    { k: t("stats.meanCI", { level: levelNumber(confidence, locale) }), v: `[${f(ci[0])}; ${f(ci[1])}]` },
     { k: t("stats.p10"), v: f(s.percentiles[10]) },
     { k: t("stats.p90"), v: f(s.percentiles[90]) },
     { k: t("stats.probPositive"), v: pct2(certaintyFromBounds(sorted, "right", 0, Infinity), locale) },
@@ -357,7 +409,7 @@ export function statsRows(fr: ForecastResult, kind: ForecastDef["format"], sorte
   ];
 }
 
-function StatsTable({ fr, kind, sorted }: { fr: ForecastResult; kind: ForecastDef["format"]; sorted: Float64Array }) {
+function StatsTable({ fr, kind, sorted, confidence }: { fr: ForecastResult; kind: ForecastDef["format"]; sorted: Float64Array; confidence: number }) {
   const { t } = useTranslation();
   const locale = useUiStore((s) => s.locale);
   return (
@@ -366,7 +418,7 @@ function StatsTable({ fr, kind, sorted }: { fr: ForecastResult; kind: ForecastDe
         { key: "k", label: t("results.statistic") },
         { key: "v", label: t("results.value"), align: "right" },
       ]}
-      rows={statsRows(fr, kind, sorted, locale, t)}
+      rows={statsRows(fr, kind, sorted, locale, t, confidence)}
     />
   );
 }

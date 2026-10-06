@@ -1,26 +1,16 @@
 /**
  * Run a simulation job in a module Web Worker (with an inline main-thread fallback).
  */
-import { cellKey } from "@openrisksim/core";
-import type { CellRef, RiskModel, SimulationProgress, SimulationResult } from "@openrisksim/core";
-import { runSimulation } from "@openrisksim/engine";
-import { SpreadsheetEngine } from "./engine";
-import { createWorkbookEvaluator } from "./evaluator";
+import type { SimulationProgress, SimulationResult } from "@openrisksim/core";
+import { runAcceleratedSimulation, type AccelerationEnv } from "./acceleration";
 import type { SimulationJob } from "./types";
 
-/** Decision overrides for a job: `decisionValues` keyed by decision id or by "Sheet!A1". */
-export function decisionOverrides(model: RiskModel, decisionValues?: Record<string, number>): { ref: CellRef; value: number }[] {
-  if (!decisionValues) return [];
-  const out: { ref: CellRef; value: number }[] = [];
-  for (const d of model.decisions ?? []) {
-    const v = decisionValues[d.id] ?? decisionValues[cellKey(d.cell.sheet, d.cell.address)];
-    if (typeof v === "number" && Number.isFinite(v)) out.push({ ref: d.cell, value: v });
-  }
-  return out;
-}
+export { decisionOverrides } from "./decisions";
 
 /**
- * Run a job on the current thread (used when Workers are unavailable, in Node and in tests).
+ * Run a job on the current thread (inside the simulation worker; also used when Workers are
+ * unavailable, in Node and in tests). Honours `job.model.settings.acceleration` (see acceleration.ts):
+ * every mode falls back to the plain spreadsheet engine when it cannot be used.
  * `onProgress` receives `{ type: "progress" }` messages; the result is returned by the Promise.
  * Aborting returns the partial result.
  */
@@ -28,23 +18,9 @@ export async function runSimulationInline(
   job: SimulationJob,
   onProgress?: (p: SimulationProgress) => void,
   signal?: AbortSignal,
+  env?: AccelerationEnv,
 ): Promise<SimulationResult> {
-  const engine = SpreadsheetEngine.fromWorkbook(job.workbook);
-  try {
-    const evaluator = createWorkbookEvaluator(engine, job.model, {
-      decisions: decisionOverrides(job.model, job.decisionValues),
-    });
-    try {
-      return await runSimulation(job.model, evaluator, {
-        onProgress: onProgress ? (completed, total) => onProgress({ type: "progress", completed, total }) : undefined,
-        signal,
-      });
-    } finally {
-      evaluator.dispose();
-    }
-  } finally {
-    engine.destroy();
-  }
+  return runAcceleratedSimulation(job, onProgress, signal, env);
 }
 
 function canUseWorker(): boolean {

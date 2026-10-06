@@ -1,12 +1,29 @@
 /**
  * Simulation report → spreadsheet sheets (bilingual es/en).
  */
-import type { DistributionSpec, RiskModel, SimulationResult } from "@openrisksim/core";
+import type { DescriptiveStats, DistributionSpec, RiskModel, SimulationResult } from "@openrisksim/core";
 import { getDistributionMeta } from "@openrisksim/distributions";
+import { meanCIHalfWidth } from "@openrisksim/engine";
 import type { ReportSheet } from "./types";
 
 type Locale = "es" | "en";
 type Row = (string | number | null)[];
+
+/** Forecast confidence level as a fraction in (0,1) (accepts percentages; default 0.95). */
+function forecastConfidence(c: number | undefined): number {
+  if (typeof c !== "number" || !Number.isFinite(c)) return 0.95;
+  const f = c > 1 && c < 100 ? c / 100 : c;
+  return f > 0 && f < 1 ? f : 0.95;
+}
+
+/** CI of the mean at `level`: the stats' own `meanCI` when computed at that level, else recomputed. */
+function meanCI(st: DescriptiveStats | undefined, level: number): [number, number] {
+  if (!st) return [NaN, NaN];
+  if (st.meanCI && st.confidenceLevel !== undefined && Math.abs(st.confidenceLevel - level) < 1e-12) return st.meanCI;
+  if (Math.abs(level - 0.95) < 1e-12 && st.meanCI95) return st.meanCI95;
+  const h = meanCIHalfWidth(st.stdDev, st.count, level);
+  return [st.mean - h, st.mean + h];
+}
 
 const MAX_RAW_ROWS = 10000;
 
@@ -22,6 +39,12 @@ const T = {
   trialsRequested: { es: "Pruebas solicitadas", en: "Trials requested" },
   trialsRun: { es: "Pruebas ejecutadas", en: "Trials run" },
   seed: { es: "Semilla", en: "Seed" },
+  backend: { es: "Motor de evaluación", en: "Evaluation backend" },
+  backendFallback: { es: "Motivo del respaldo", en: "Fallback reason" },
+  backend_standard: { es: "Estándar (hoja de cálculo)", en: "Standard (spreadsheet)" },
+  backend_multicore: { es: "CPU multinúcleo", en: "Multicore CPU" },
+  backend_compiled: { es: "Fórmulas compiladas (CPU)", en: "Compiled formulas (CPU)" },
+  backend_gpu: { es: "GPU (WebGPU, f32)", en: "GPU (WebGPU, f32)" },
   random: { es: "aleatoria", en: "random" },
   sampling: { es: "Método de muestreo", en: "Sampling method" },
   monteCarlo: { es: "Monte Carlo", en: "Monte Carlo" },
@@ -68,8 +91,9 @@ const T = {
   skewness: { es: "Asimetría", en: "Skewness" },
   kurtosis: { es: "Curtosis (exceso)", en: "Kurtosis (excess)" },
   sem: { es: "Error estándar de la media", en: "Standard error of the mean" },
-  ciLow: { es: "IC 95% media (inferior)", en: "Mean 95% CI (lower)" },
-  ciHigh: { es: "IC 95% media (superior)", en: "Mean 95% CI (upper)" },
+  ciLow: { es: "IC {p} de la media – inferior", en: "{p} CI of mean – lower" },
+  ciHigh: { es: "IC {p} de la media – superior", en: "{p} CI of mean – upper" },
+  ciLevel: { es: "Nivel de confianza del IC", en: "CI confidence level" },
   percentiles: { es: "Percentiles", en: "Percentiles" },
   certainty: { es: "Certeza", en: "Certainty" },
   pBelow0: { es: "P(x < 0)", en: "P(x < 0)" },
@@ -161,6 +185,17 @@ export function buildSimulationReport(model: RiskModel, result: SimulationResult
     [L("elapsed"), Math.round(result.elapsedMs) / 1000],
     [L("speed"), result.elapsedMs > 0 ? Math.round((result.trials / result.elapsedMs) * 1000) : null],
     [L("stoppedEarly"), result.stoppedEarly ? L("yes") : L("no")],
+    ...(result.backend
+      ? ([
+          [
+            L("backend"),
+            [L(`backend_${result.backend.mode}` as keyof typeof T), result.backend.device]
+              .filter(Boolean)
+              .join(" · "),
+          ],
+          ...(result.backend.fallbackReason ? [[L("backendFallback"), result.backend.fallbackReason]] : []),
+        ] as Row[])
+      : []),
     [L("nAssumptions"), enabled.length],
     [L("nForecasts"), forecasts.length],
     [L("nDecisions"), model.decisions.length],
@@ -197,10 +232,17 @@ export function buildSimulationReport(model: RiskModel, result: SimulationResult
     ["skewness", (id) => result.forecasts[id].stats?.skewness],
     ["kurtosis", (id) => result.forecasts[id].stats?.kurtosis],
     ["sem", (id) => result.forecasts[id].stats?.stdErrorMean],
-    ["ciLow", (id) => result.forecasts[id].stats?.meanCI95?.[0]],
-    ["ciHigh", (id) => result.forecasts[id].stats?.meanCI95?.[1]],
   ];
   for (const [key, get] of statKeys) fRows.push([L(key), ...forecasts.map((f) => finite(get(f.id)))]);
+  // Confidence interval of the mean at each forecast's own confidence level (default 95 %).
+  const levels = forecasts.map((f) => forecastConfidence(f.confidence));
+  const ci = forecasts.map((f, i) => meanCI(result.forecasts[f.id].stats, levels[i]));
+  const uniform = levels.every((l) => l === levels[0]);
+  const pct = (l: number) => `${Math.round(l * 1000) / 10}${locale === "es" ? " %" : "%"}`;
+  const ciLabel = (k: "ciLow" | "ciHigh") => L(k).replace(uniform && levels.length ? "{p}" : "{p} ", uniform && levels.length ? pct(levels[0]) : "");
+  if (!uniform) fRows.push([L("ciLevel"), ...levels.map((l) => pct(l))]);
+  fRows.push([ciLabel("ciLow"), ...ci.map((c) => finite(c[0]))]);
+  fRows.push([ciLabel("ciHigh"), ...ci.map((c) => finite(c[1]))]);
   fRows.push([]);
   fRows.push([L("percentiles")]);
   for (let p = 5; p <= 95; p += 5) {

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "📖 Documentación · Documentation"
+    url: https://fernandevdaza.github.io/openrisksim/docs/
+    about: "Guías, tutorial y preguntas frecuentes · Guides, tutorial and FAQ"
+  - name: "💬 Preguntas y ayuda · Questions & help"
+    url: https://github.com/fernandevdaza/openrisksim/discussions
+    about: "Dudas sobre cómo modelar tu proyecto o usar la app · Questions about modelling or using the app"

@@ -21,6 +21,10 @@ export interface DescriptiveStats {
   percentiles: Record<number, number>;
   /** 95% confidence interval for the mean. */
   meanCI95: [number, number];
+  /** Confidence interval for the mean at `confidenceLevel` (Student t); optional for older results. */
+  meanCI?: [number, number];
+  /** Confidence level of `meanCI` (fraction, e.g. 0.9). */
+  confidenceLevel?: number;
 }
 
 export interface HistogramBin {
@@ -73,7 +77,25 @@ export interface SpiderSeries {
   outputs: number[];
 }
 
+/** Which backend actually evaluated the trials (see AccelerationMode). */
+export interface SimulationBackendInfo {
+  mode: "standard" | "multicore" | "compiled" | "gpu";
+  /** What the user asked for (e.g. "auto"). */
+  requested: "auto" | "standard" | "multicore" | "compiled" | "gpu";
+  /** Human-readable device, e.g. "Apple M3 Pro (Metal)" or "8 CPU threads". */
+  device?: string;
+  precision: "f64" | "f32";
+  workers?: number;
+  trialsPerSecond: number;
+  /** Why a faster mode was not used / was abandoned (e.g. "IRR is not supported on GPU"). */
+  fallbackReason?: string;
+  /** GPU/compiled results compared against the spreadsheet engine on a sample of trials. */
+  validation?: { checked: number; maxRelativeError: number; passed: boolean };
+}
+
 export interface SimulationResult {
+  /** Optional for backward compatibility with results produced before acceleration existed. */
+  backend?: SimulationBackendInfo;
   trials: number;
   elapsedMs: number;
   seed: number | null;

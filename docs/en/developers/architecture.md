@@ -1,4 +1,13 @@
-# OpenRiskSim — Architecture & public API contracts
+---
+outline: [2, 2]
+---
+
+# Architecture & public API contracts
+
+::: info
+This page describes the package boundaries and public APIs of the monorepo. For the algorithms behind them see [Numerical engine](./numerical-engine); for the development workflow see [Contributing](./contributing). The signatures below are a contract summary — the source in `packages/*/src` is authoritative.
+:::
+
 
 OpenRiskSim is an open-source, browser-based alternative to Risk Simulator / @RISK / Crystal Ball.
 The user opens an `.xlsx` (from Excel, LibreOffice, WPS, Google Sheets…), marks **assumption** cells
@@ -10,32 +19,52 @@ fitting, optimization and project-finance tools. Everything runs locally in the 
 - TypeScript strict. Tests with Vitest (`pnpm test` at the root, files `src/**/*.test.ts`).
 - Code, comments, identifiers and docs in **English**. UI is bilingual **es/en**.
 - License GPL-3.0-or-later (HyperFormula is GPLv3).
-- **Never add a runtime dependency** to a package without it being listed here. Pure TS math is preferred.
+- **Never add a runtime dependency** to a package without discussing it first. Pure TS math is preferred.
 
 ```
 packages/
-  core/           shared types only (DistributionSpec, RiskModel, SimulationResult…)  ← already written
+  core/           shared types only (DistributionSpec, RiskModel, SimulationResult…)
   distributions/  RNG, special functions, 33 distributions, distribution fitting
   engine/         sampling (MC / LHS), correlations, descriptive stats, simulation runner, sensitivity
   finance/        NPV, IRR, MIRR, payback, B/C, depreciation, loans, break-even, scenarios
   forecast/       regression, smoothing, ARIMA, curve fitting, stochastic processes, error metrics
   optimizer/      Nelder–Mead, genetic algorithm, simulated annealing; static/stochastic optimization
-  workbook/       xlsx/csv import/export, HyperFormula engine, ModelEvaluator, worker, reports
+  accel/          formula compiler → JavaScript (f64) and WGSL for WebGPU (f32)
+  workbook/       xlsx/csv import/export, HyperFormula engine, ModelEvaluator, worker, acceleration, reports
 apps/
   web/            React 19 + Vite + Tailwind 4 + ECharts + zustand + i18next UI
 ```
 
-Dependency graph: `core ← distributions ← engine ← optimizer`, `core ← finance`, `distributions ← forecast`,
-`workbook ← (core, distributions, engine, finance)`, `web ← everything`.
+Dependency graph: `core ← distributions ← engine ← optimizer`, `core ← finance`, `distributions ← forecast`, `core ← accel`,
+`workbook ← (core, distributions, engine, finance, accel)`, `web ← everything`. `workbook` loads `accel` through a dynamic
+`import()` (`accelDeps.ts`), so standard/multicore runs never pay for it and a failure to load it only disables acceleration.
 
 ---
 
-## `@openrisksim/core` (done — read `packages/core/src/*.ts`)
+## `@openrisksim/core`
+Read `packages/core/src/*.ts`.
+
 Types: `DistributionId`, `DISTRIBUTION_IDS`, `DistributionSpec`, `DistributionMeta`, `ParamMeta`, `I18nText`,
 `Distribution`, `Rng`, `CellRef`, `AssumptionDef`, `ForecastDef`, `DecisionVariableDef`, `CorrelationDef`,
 `SamplingMethod`, `SimulationSettings`, `DEFAULT_SETTINGS`, `RiskModel`, `emptyModel()`, `ModelEvaluator`,
 `DescriptiveStats`, `HistogramBin`, `ForecastResult`, `SensitivityEntry`, `TornadoEntry`, `SpiderSeries`,
 `SimulationResult`, `SimulationProgress`, `newId()`, `cellKey()`.
+
+Acceleration and confidence levels:
+```ts
+export type AccelerationMode = "auto" | "standard" | "multicore" | "compiled" | "gpu";
+// SimulationSettings: acceleration?: AccelerationMode (missing = "auto"); workers?: number | null (null = hardwareConcurrency − 1, clamped 1…16)
+// ForecastDef: certainty?: number (initial two-tail chart band, default 0.9); confidence?: number (CI of the mean, default 0.95)
+export interface SimulationBackendInfo {
+  mode: "standard" | "multicore" | "compiled" | "gpu";            // what actually ran
+  requested: AccelerationMode;
+  device?: string;                                                  // "Apple M3 Pro (Metal)", "8 CPU workers"…
+  precision: "f64" | "f32"; workers?: number; trialsPerSecond: number;
+  fallbackReason?: string;                                          // localized, " · "-joined
+  validation?: { checked: number; maxRelativeError: number; passed: boolean };
+}
+// SimulationResult.backend?: SimulationBackendInfo
+```
 
 ---
 
@@ -117,6 +146,12 @@ export interface RunOptions {
 }
 /** Runs the model. Evaluator inputs follow the order of *enabled* assumptions in model.assumptions; outputs follow model.forecasts. */
 export async function runSimulation(model: RiskModel, evaluator: ModelEvaluator, options?: RunOptions): Promise<SimulationResult>;
+/** Batched pipeline used by every acceleration mode. Samples are drawn once (seed, LHS, correlations, truncation). */
+export interface BatchEvaluator { evaluateBatch(inputs: Float64Array /* row-major n×width */, n: number, offset: number, signal?: AbortSignal): Promise<Float64Array> | Float64Array }
+export function prepareSimulation(model: RiskModel, n?: number, rng?: Rng): PreparedSimulation; // { seed, trials, assumptionIds, k, samples, columns, fillRows(offset, count, out?, extra?) … }
+export async function runSimulationBatched(model: RiskModel, batchEvaluator: BatchEvaluator, options?: BatchedRunOptions): Promise<SimulationResult>;
+// BatchedRunOptions: onProgress, signal, batchSize (default 250), precisionCheckEvery (default 250, independent of batchSize so every backend stops at the same trial), prepared, extraInputs
+export function batchEvaluatorFromModelEvaluator(evaluator: ModelEvaluator, outputs: number): BatchEvaluator;
 export function computeSensitivity(assumptionSamples: Record<string, Float64Array>, forecastValues: Float64Array): SensitivityEntry[]; // sorted by |rankCorrelation| desc
 /** One-at-a-time tornado: each enabled assumption at its pLow/pHigh percentile, others at base value. */
 export function tornado(model: RiskModel, evaluator: ModelEvaluator, baseInputs: Float64Array, forecastIndex: number, opts?: { pLow?: number; pHigh?: number }): TornadoEntry[]; // default 0.1/0.9, sorted by swing desc
@@ -182,12 +217,17 @@ export interface ForecastOutput {
   method: string; params: Record<string, number>;
   fitted: number[];                  // in-sample one-step fitted values (NaN where undefined)
   forecast: number[];                // h periods ahead
-  lower95: number[]; upper95: number[]; lower80: number[]; upper80: number[];
+  lower95: number[]; upper95: number[]; lower80: number[]; upper80: number[];   // always populated (backward compatibility)
+  intervals: { level: number; lower: number[]; upper: number[] }[];               // one per requested level, ascending
   residuals: number[];
   metrics: ErrorMetrics;
 }
 export interface ErrorMetrics { mae: number; mse: number; rmse: number; mape: number; smape: number; theilU: number; r2: number; aic?: number; bic?: number }
 export function errorMetrics(actual: number[], fitted: number[]): ErrorMetrics;
+// Every forecasting function below also accepts `opts: IntervalOptions = { levels?: number[] }` (last argument):
+// confidence levels as fractions in [0.5, 0.999], default [0.8, 0.95].
+export const DEFAULT_LEVELS: readonly number[];                  // [0.8, 0.95]
+export function normalizeLevels(levels?: readonly number[]): number[]; // validates [0.5, 0.999], sorts, de-duplicates; undefined → defaults
 export function movingAverage(y: number[], h: number, window: number): ForecastOutput;
 export function simpleExponentialSmoothing(y: number[], h: number, alpha?: number): ForecastOutput;  // alpha optimised (SSE) when omitted
 export function holt(y: number[], h: number, opts?: { alpha?: number; beta?: number; damped?: boolean; phi?: number }): ForecastOutput;
@@ -206,12 +246,17 @@ export interface RegressionResult {
 }
 export function multipleRegression(y: number[], X: number[][], names?: string[], opts?: { intercept?: boolean }): RegressionResult; // X: rows = observations
 export function stepwiseRegression(y: number[], X: number[][], names?: string[], opts?: { pEnter?: number; pRemove?: number }): RegressionResult & { selected: string[] };
+// Both regressions accept opts.confidence (default 0.95, range [0.5, 0.999]): coefficients[].ci at RegressionResult.confidenceLevel (ci95 kept).
+/** Point prediction with a Student-t interval: CI of the mean response, or with `prediction: true` the prediction interval of a new observation. */
+export function predict(result: RegressionResult, xRow: number[], opts?: { confidence?: number; prediction?: boolean }): { value: number; lower: number; upper: number; stdError: number; level: number };
 
 // Stochastic processes (paths for simulation/charts): returns `paths` × (steps+1)
 export function geometricBrownianMotion(p: { s0: number; drift: number; volatility: number; dt: number; steps: number; paths: number; seed?: number }): number[][];
 export function meanReversion(p: { s0: number; longRunMean: number; speed: number; volatility: number; dt: number; steps: number; paths: number; seed?: number }): number[][]; // Ornstein–Uhlenbeck
 export function jumpDiffusion(p: { s0: number; drift: number; volatility: number; jumpRate: number; jumpMean: number; jumpStdDev: number; dt: number; steps: number; paths: number; seed?: number }): number[][]; // Merton
 export function estimateGbm(prices: number[], dt: number): { drift: number; volatility: number };
+/** Fan-chart bands: for each level L in (0,1), the (1−L)/2 … (1+L)/2 percentiles across paths at every step, plus the median. */
+export function pathPercentileBands(paths: number[][], levels: readonly number[]): { median: number[]; bands: { level: number; lower: number[]; upper: number[] }[] };
 // Descriptive time-series tools
 export function acf(y: number[], maxLag: number): number[]; export function pacf(y: number[], maxLag: number): number[];
 export function decompose(y: number[], period: number, kind?: "additive" | "multiplicative"): { trend: number[]; seasonal: number[]; residual: number[] };
@@ -289,6 +334,18 @@ export function createWorkbookEvaluator(engine: SpreadsheetEngine, model: RiskMo
 /** Simulation in a Web Worker. */
 export interface SimulationJob { workbook: WorkbookData; model: RiskModel; decisionValues?: Record<string, number> }
 export function runSimulationInWorker(job: SimulationJob, onProgress?: (p: SimulationProgress) => void, signal?: AbortSignal): Promise<SimulationResult>;
+
+// Acceleration (acceleration.ts) — runs inside the simulation worker; see the @openrisksim/accel section below
+export function runAcceleratedSimulation(job: SimulationJob, onProgress?, signal?, env?: AccelerationEnv): Promise<SimulationResult>; // never fails because of acceleration
+export function chooseAccelerationMode(p: AccelerationPlanInput): { mode: BackendMode; fallback?: "gpu-unavailable" | "not-gpu-compatible" | "not-compiled" | "no-workers" };
+//   auto: gpu if available + GPU-compatible + trials ≥ 20 000 (AUTO_GPU_MIN_TRIALS); else compiled if it compiles;
+//         else multicore if trials ≥ 2 000 (AUTO_MULTICORE_MIN_TRIALS) and > 1 thread/worker; else standard.
+//   explicit: gpu → compiled → standard, compiled → standard, multicore → standard.
+export function detectAccelerationCapabilities(source: FormulaSource | WorkbookData, model: RiskModel, options?: { decisionValues?; gpu?: boolean }): Promise<AccelerationCapabilities>;
+export const VALIDATION_TRIALS = 200; // first trials re-evaluated with HyperFormula: COMPILED_TOLERANCE 1e-9, GPU_TOLERANCE 1e-4 (relative)
+// roundLikeSpreadsheet(values): compiled f64 outputs rounded like HyperFormula's smartRounding → bit-identical to standard
+// pool.ts: multicore = pool of evaluation.worker.ts members, each with its own SpreadsheetEngine; chunks handed out as a work
+//   queue and written back at their trial index (bit-identical to standard). defaultWorkerCount(threads) = threads − 1, clamped 1…16.
 /** Example workbooks (built programmatically): project evaluation, retail inventory, portfolio, etc. */
 export const EXAMPLES: { id: string; name: I18nText; description: I18nText; build: () => WorkbookData }[];
 ```
@@ -296,6 +353,31 @@ HyperFormula custom functions registered by `SpreadsheetEngine` (so models can a
 Risk Simulator's `RS*` / @RISK's `Risk*` functions): `ORS.NORMAL(mean,sd)`, `ORS.TRIANGULAR(min,mode,max)`, `ORS.UNIFORM(min,max)`,
 `ORS.PERT(min,mode,max)`, `ORS.LOGNORMAL(mean,sd)` — they return the distribution mean in normal recalcs. Finance helpers
 `ORS.MIRR`, `ORS.PAYBACK(range)`, `ORS.DPAYBACK(rate,range)`, `ORS.PI(rate,range)`.
+
+## `@openrisksim/accel`
+Compiles the formulas between assumption (and decision) cells and forecast cells. Pipeline: dependency walk from each forecast
+(cells that don't depend on inputs become constants) → formula **parser** (`parser.ts`) → typed **IR** with constant folding and
+HyperFormula-compatible coercion (`lower.ts`, `ir.ts`) → **JS codegen** (`jsgen.ts`, f64, `new Function`, with an IR interpreter
+fallback) and **WGSL** (`wgsl.ts`, f32 compute shader, one invocation per trial, explicit error flags) run by `gpu.ts`.
+```ts
+export function compileModel(source: FormulaSource, model: RiskModel, options?: { extraInputs?: CellRef[]; selfCheck?: boolean }):
+  { ok: true; program: CompiledProgram } | { ok: false; reasons: AccelReason[] /* { cell: "Sheet!A1", message: { en, es } } */ };
+export interface CompiledProgram {
+  inputCount: number; outputCount: number; formulaCount: number; functionsUsed: string[];
+  gpuSupport: { ok: true } | { ok: false; reasons: AccelReason[] };   // MEDIAN is CPU-only; ≤ 5000 compiled cells; f32-range constants
+  createJsEvaluator(): ModelEvaluator;
+  evaluateBatchJs(inputs: Float64Array, n: number, out?: Float64Array): Float64Array;   // row-major n×inputCount → n×outputCount
+  toWGSL(): string;
+}
+export const SUPPORTED_FUNCTIONS: readonly string[];
+export function detectGpu(): Promise<GpuInfo | null>;                 // requestAdapter({ powerPreference: "high-performance" })
+export function createGpuRunner(program: CompiledProgram): Promise<GpuRunner>; // evaluate(inputs, n, { signal, onProgress }) → Float64Array; dispose()
+export function compareOutputs(reference: Float64Array, candidate: Float64Array, opts?: { relTol?: number; absTol?: number; outputCount?: number }):
+  { checked: number; maxRelativeError: number; passed: boolean };
+```
+`FormulaSource` is a minimal read-only workbook view (`sheetNames`, `getFormula`, `getValue`, optional `getNamedExpression`);
+`SpreadsheetEngine` satisfies it structurally. The self-check (`selfCheck`, default true) runs the program on the current values and
+rejects the compile if any compiled cell differs from the sheet. See [Numerical engine](./numerical-engine#formula-compiler-and-gpu).
 
 ## `apps/web`
 Vite + React 19 + TS + Tailwind 4 (`@tailwindcss/vite`) + ECharts (direct `echarts` import, wrapper component) + zustand +
@@ -312,7 +394,7 @@ Layout (Risk-Simulator-like):
 - **Right dock / floating windows**: forecast chart windows (histogram, CDF, certainty sliders with two-tail/left/right + certainty %,
   statistics, percentiles, overlay), model explorer (tree of assumptions/forecasts/decisions).
 
-Shared app state (`apps/web/src/store/*`, zustand) — **owned by the shell agent**; tool components consume it:
+Shared app state (`apps/web/src/store/*`, zustand) — owned by the shell; tool components consume it:
 ```ts
 useWorkbookStore: { engine: SpreadsheetEngine | null; workbook: WorkbookData | null; activeSheet: string; selection: { sheet: string; range: string /* "B2:D9" or "B2" */ };
   version: number /* bumps on every change */; loadWorkbook(wb: WorkbookData): void; getSelectionValues(): (number|string|boolean|null)[][];
@@ -322,7 +404,7 @@ useModelStore: { model: RiskModel; setModel(m): void; upsertAssumption(a); remov
 useSimulationStore: { status: "idle" | "running" | "done" | "error"; progress: number; result: SimulationResult | null; run(): Promise<void>; abort(): void; reset(): void }
 useUiStore: { locale: "es" | "en"; setLocale(l); openTool(toolId: string, props?: unknown): void; closeTool(toolId: string): void; openTools: { id: string; props?: unknown }[] }
 ```
-Tools (`apps/web/src/tools/**`, **owned by the tools agent**) are registered in `apps/web/src/tools/registry.ts`:
+Tools (`apps/web/src/tools/**`) are registered in `apps/web/src/tools/registry.ts`:
 ```ts
 export interface ToolDef { id: string; ribbonTab: "analysis" | "forecast" | "optimization" | "finance"; label: I18nText; icon: LucideIcon; component: React.ComponentType<{ onClose(): void }>; size?: "md" | "lg" | "xl" }
 export const TOOLS: ToolDef[];

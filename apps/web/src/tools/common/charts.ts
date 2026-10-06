@@ -349,11 +349,16 @@ export function forecastBandOption(p: {
   actual: number[];
   fitted: number[];
   forecast: number[];
-  lower80: number[];
-  upper80: number[];
-  lower95: number[];
-  upper95: number[];
-  labels: { actual: string; fitted: string; forecast: string; band80: string; band95: string; period: string };
+  /**
+   * Prediction bands, one per confidence level (any order; drawn widest first, the wider the
+   * more transparent). When omitted, the legacy 80 % / 95 % fields below are used.
+   */
+  bands?: { level: number; lower: number[]; upper: number[]; label: string }[];
+  lower80?: number[];
+  upper80?: number[];
+  lower95?: number[];
+  upper95?: number[];
+  labels: { actual: string; fitted: string; forecast: string; band80?: string; band95?: string; period: string };
   locale: Locale;
 }): EChartsOption {
   const col = palette();
@@ -382,16 +387,38 @@ export function forecastBandOption(p: {
       tooltip: { show: false },
     },
   ];
+  const bands = (
+    p.bands ??
+    [
+      p.lower80 && p.upper80 ? { level: 0.8, lower: p.lower80, upper: p.upper80, label: p.labels.band80 ?? "80 %" } : null,
+      p.lower95 && p.upper95 ? { level: 0.95, lower: p.lower95, upper: p.upper95, label: p.labels.band95 ?? "95 %" } : null,
+    ].filter((b): b is NonNullable<typeof b> => b !== null)
+  )
+    .slice()
+    .sort((a, b) => b.level - a.level); // widest first
+  const nb = bands.length;
+  // widest band: lightest; inner bands progressively more opaque (they also overlap the outer ones)
+  const opacityOf = (i: number) => (nb <= 1 ? 0.18 : 0.1 + (0.12 * i) / (nb - 1));
   return {
     ...baseOption(),
     tooltip: { trigger: "axis", valueFormatter: (v: unknown) => (typeof v === "number" ? fmt(v, 3, p.locale) : "—") },
-    legend: { bottom: 0, data: [p.labels.actual, p.labels.fitted, p.labels.forecast, p.labels.band80, p.labels.band95] },
+    legend: {
+      bottom: 0,
+      data: [
+        p.labels.actual,
+        p.labels.fitted,
+        p.labels.forecast,
+        // band swatches in the band colour (inner → outer), not the invisible base series' colour
+        ...bands
+          .map((b, i) => ({ name: b.label, icon: "roundRect", itemStyle: { color: col[0], opacity: Math.min(1, 0.25 + 2.5 * opacityOf(i)) } }))
+          .reverse(),
+      ],
+    },
     grid: { left: 70, right: 24, top: 20, bottom: 64 },
     xAxis: { type: "category", data: x, name: p.labels.period, nameLocation: "middle", nameGap: 28, boundaryGap: false, axisLabel: { color: ink() } },
     yAxis: valueAxis(undefined, p.locale),
     series: [
-      ...band(p.lower95, p.upper95, p.labels.band95, 0.12, "b95"),
-      ...band(p.lower80, p.upper80, p.labels.band80, 0.22, "b80"),
+      ...bands.flatMap((b, i) => band(b.lower, b.upper, b.label, opacityOf(i), `band${i}`)),
       { type: "line", name: p.labels.actual, data: p.actual, showSymbol: n <= 60, symbolSize: 5, lineStyle: { width: 2, color: ink() }, itemStyle: { color: ink() } },
       { type: "line", name: p.labels.fitted, data: clean(p.fitted), showSymbol: false, lineStyle: { width: 2, type: "dashed", color: col[1] }, itemStyle: { color: col[1] } },
       { type: "line", name: p.labels.forecast, data: fc, showSymbol: h <= 40, symbolSize: 6, lineStyle: { width: 2.5, color: col[0] }, itemStyle: { color: col[0] } },
@@ -447,7 +474,14 @@ export function fanChartOption(p: {
   return {
     ...baseOption(),
     tooltip: { trigger: "axis", valueFormatter: (v: unknown) => (typeof v === "number" ? fmt(v, 3, p.locale) : "—") },
-    legend: { bottom: 0, data: [p.labels.median, ...p.bands.map((b) => b.label), p.labels.paths] },
+    legend: {
+      bottom: 0,
+      data: [
+        p.labels.median,
+        ...p.bands.map((b, i) => ({ name: b.label, icon: "roundRect", itemStyle: { color: col[0], opacity: Math.min(1, 0.25 + 2.5 * (0.1 + 0.08 * i)) } })),
+        p.labels.paths,
+      ],
+    },
     grid: { left: 70, right: 24, top: 20, bottom: 64 },
     xAxis: { type: "category", data: p.x, name: p.labels.time, nameLocation: "middle", nameGap: 28, boundaryGap: false, axisLabel: { color: ink() } },
     yAxis: valueAxis(p.labels.value, p.locale),

@@ -54,6 +54,8 @@ export interface SimulationJob {
   model: RiskModel;
   /** Decision values keyed by decision id (or by "Sheet!A1" cell key). */
   decisionValues?: Record<string, number>;
+  /** Language of acceleration fallback reasons in `result.backend` (default "en"). */
+  locale?: "es" | "en";
 }
 
 /** Name of the hidden sheet that stores the model JSON. */

@@ -6,11 +6,12 @@
  */
 import { studentTQuantile } from "./_stats";
 import { leastSquares } from "./linalg";
-import { assembleOutput, validateSeries, type ForecastOutput } from "./metrics";
+import { assembleOutput, intervalsFrom, normalizeLevels, validateSeries, type ForecastOutput, type IntervalOptions } from "./metrics";
 
 export type TrendKind = "linear" | "exponential" | "logarithmic" | "power" | "polynomial2" | "polynomial3";
 
-export function trendForecast(y: number[], h: number, kind: TrendKind): ForecastOutput {
+export function trendForecast(y: number[], h: number, kind: TrendKind, opts: IntervalOptions = {}): ForecastOutput {
+  const levels = normalizeLevels(opts.levels);
   const degree = kind === "polynomial3" ? 3 : kind === "polynomial2" ? 2 : 1;
   validateSeries(y, degree + 3, "trendForecast");
   const logY = kind === "exponential" || kind === "power";
@@ -33,10 +34,7 @@ export function trendForecast(y: number[], h: number, kind: TrendKind): Forecast
   const s2 = sse / df;
   const fitted = logY ? fit.fitted.map(Math.exp) : fit.fitted;
   const forecast: number[] = [];
-  const half95: number[] = [];
-  const half80: number[] = [];
-  const t95 = studentTQuantile(0.975, df);
-  const t80 = studentTQuantile(0.9, df);
+  const seFc: number[] = [];
   for (let i = 1; i <= h; i++) {
     const x0 = row(n + i);
     let mu = 0;
@@ -45,8 +43,7 @@ export function trendForecast(y: number[], h: number, kind: TrendKind): Forecast
     for (let a = 0; a < p; a++) for (let b = 0; b < p; b++) lev += x0[a] * fit.xtxInv[a][b] * x0[b];
     const se = Math.sqrt(s2 * (1 + lev));
     forecast.push(mu);
-    half95.push(t95 * se);
-    half80.push(t80 * se);
+    seFc.push(se);
   }
   const params: Record<string, number> = {};
   const names = ["a", "b", "c", "d"];
@@ -54,9 +51,12 @@ export function trendForecast(y: number[], h: number, kind: TrendKind): Forecast
   // Base output with zero-width intervals, then fill in the exact t-based intervals.
   const out = assembleOutput(`trend:${kind}`, params, y, fitted, forecast.map((m) => (logY ? Math.exp(m) : m)), forecast.map(() => 0), p);
   const tr = logY ? Math.exp : (v: number) => v;
-  out.lower95 = forecast.map((m, i) => tr(m - half95[i]));
-  out.upper95 = forecast.map((m, i) => tr(m + half95[i]));
-  out.lower80 = forecast.map((m, i) => tr(m - half80[i]));
-  out.upper80 = forecast.map((m, i) => tr(m + half80[i]));
+  const tQ = (level: number) => studentTQuantile((1 + level) / 2, df);
+  const [i80, i95] = intervalsFrom(forecast, seFc, [0.8, 0.95], tQ, tr);
+  out.lower95 = i95.lower;
+  out.upper95 = i95.upper;
+  out.lower80 = i80.lower;
+  out.upper80 = i80.upper;
+  out.intervals = intervalsFrom(forecast, seFc, levels, tQ, tr);
   return out;
 }

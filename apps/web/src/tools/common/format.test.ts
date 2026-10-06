@@ -29,5 +29,8 @@ describe("number formatting", () => {
     expect(fmtPeriods(Infinity, "es")).toBe("No se recupera");
     expect(fmtPeriods(2.5, "en")).toBe("2.50");
     expect(fmtCompact(2500000, "es")).toBe("2,5 M");
+    expect(fmtCompact(0.0000057, "es")).toBe("5,7e-6");
+    expect(fmtCompact(0.0000057, "en")).toBe("5.7e-6");
+    expect(fmtCompact(0, "es")).toBe("0");
   });
 });

@@ -42,3 +42,27 @@ suite("numeric helpers", () => {
     expect(values.reduce((a, b) => a + b, 0)).toBeCloseTo(12, 10);
   });
 });
+
+suite("argsort (radix path)", () => {
+  it("matches the comparator order for large arrays with ties, ±0 and infinities", () => {
+    const n = 20000;
+    const v = new Float64Array(n);
+    let s = 7;
+    for (let i = 0; i < n; i++) {
+      s = (s * 1103515245 + 12345) % 2147483648;
+      v[i] = i % 7 === 0 ? Math.round((s / 2147483648) * 10) - 5 : (s / 2147483648 - 0.5) * 1e6;
+    }
+    v[3] = -0;
+    v[4] = 0;
+    v[5] = Infinity;
+    v[6] = -Infinity;
+    v[8] = -1e-300;
+    const ref = Array.from({ length: n }, (_, i) => i).sort((a, b) => v[a] - v[b] || a - b);
+    expect(Array.from(argsort(v))).toEqual(ref);
+    const r = averageRanks(v);
+    expect(r[3]).toBe(r[4]);
+    const withNaN = v.slice();
+    withNaN[10] = NaN;
+    expect(argsort(withNaN)).toHaveLength(n);
+  });
+});

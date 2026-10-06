@@ -7,6 +7,7 @@ import { useUiStore } from "../store/ui";
 import { parseRangeBounds } from "../lib/a1";
 import { formatStat } from "../lib/numberFormat";
 import { actions } from "../actions";
+import { BackendBadge } from "./BackendBadge";
 
 function SelectionSummary() {
   const { t } = useTranslation();
@@ -105,6 +106,7 @@ export function StatusBar() {
             {t("settings.seed")}: <b>{result.seed ?? "—"}</b>
           </span>
           <span>{resultModel?.settings.sampling === "latinHypercube" ? "LHS" : "Monte Carlo"}</span>
+          {result.backend && <BackendBadge backend={result.backend} />}
           {errors > 0 && (
             <span className="flex items-center gap-1 text-red-700 dark:text-red-400">
               <CircleAlert size={12} /> {t("status.errors", { n: errors })}

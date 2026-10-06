@@ -7,7 +7,7 @@ import type { EChartsOption } from "echarts";
 import type { RiskModel, SimulationResult } from "@openrisksim/core";
 import { buildSimulationReport, writeXlsx, type ReportSheet, type WorkbookData } from "@openrisksim/workbook";
 import { computeBins, forecastChartOption } from "../results/charts";
-import { defaultCertainty, sortedFinite, certaintyFromBounds, type CertaintyState } from "./certainty";
+import { defaultCertainty, sortedFinite, certaintyFromBounds, levelNumber, meanConfidenceInterval, type CertaintyState } from "./certainty";
 import { formatStat, type UiLocale } from "./numberFormat";
 import { describeSpec } from "./modelText";
 
@@ -41,7 +41,7 @@ export function forecastImages(model: RiskModel, result: SimulationResult, local
     if (!fr) continue;
     const sorted = sortedFinite(fr.values);
     if (!sorted.length) continue;
-    const state = states[f.id] ?? defaultCertainty(sorted);
+    const state = states[f.id] ?? defaultCertainty(sorted, "two", f.certainty ?? 0.9);
     const option = forecastChartOption({
       sorted,
       bins: computeBins(sorted),
@@ -117,7 +117,9 @@ export function buildHtmlReport(model: RiskModel, result: SimulationResult, loca
     const fmt = (v: number) => esc(formatStat(v, locale, kind));
     const img = imgs.find((i) => i.forecastId === f.id);
     const sorted = sortedFinite(fr.values);
-    const state = img?.state ?? defaultCertainty(sorted);
+    const state = img?.state ?? defaultCertainty(sorted, "two", f.certainty ?? 0.9);
+    const confidence = f.confidence ?? 0.95;
+    const ci = meanConfidenceInterval(st, confidence);
     const pPos = certaintyFromBounds(sorted, "right", 0, Infinity);
     const sens = (result.sensitivity[f.id] ?? []).slice(0, 10);
     const certText =
@@ -140,7 +142,7 @@ export function buildHtmlReport(model: RiskModel, result: SimulationResult, loca
           <tr><th>${esc(t("stats.max"))}</th><td>${fmt(st.max)}</td></tr>
           <tr><th>${esc(t("stats.skewness"))}</th><td>${esc(formatStat(st.skewness, locale, "number", 4))}</td></tr>
           <tr><th>${esc(t("stats.kurtosis"))}</th><td>${esc(formatStat(st.kurtosis, locale, "number", 4))}</td></tr>
-          <tr><th>${esc(t("stats.meanCI95"))}</th><td>[${fmt(st.meanCI95[0])}; ${fmt(st.meanCI95[1])}]</td></tr>
+          <tr><th>${esc(t("stats.meanCI", { level: levelNumber(confidence, locale) }))}</th><td>[${fmt(ci[0])}; ${fmt(ci[1])}]</td></tr>
           <tr><th>${esc(t("stats.probPositive"))}</th><td>${(pPos * 100).toFixed(2)}%</td></tr>
         </table>
         <table class="kv">

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<style>
+@font-face { font-family: G; src: url(../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2) format('woff2'); font-weight: 100 900; }
+@font-face { font-family: GM; src: url(../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2) format('woff2'); font-weight: 100 900; }
+@font-face { font-family: N; src: url(../../node_modules/@fontsource-variable/newsreader/files/newsreader-latin-wght-italic.woff2) format('woff2'); font-weight: 200 800; font-style: italic; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1280px; height: 480px; overflow: hidden; background: #05070b; }
+.b { position: relative; width: 1280px; height: 480px; overflow: hidden; font-family: G, sans-serif; color: #e2e8f0;
+  background:
+    radial-gradient(900px 420px at 108% 118%, rgba(99, 102, 241, .55), transparent 60%),
+    radial-gradient(520px 260px at 96% 110%, rgba(34, 211, 238, .45), transparent 65%),
+    radial-gradient(600px 300px at -5% -20%, rgba(45, 212, 191, .10), transparent 60%),
+    #05070b; }
+.dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(148,163,184,.13) 1px, transparent 1.2px); background-size: 22px 22px; mask-image: linear-gradient(90deg, rgba(0,0,0,.9), rgba(0,0,0,.25)); }
+.left { position: absolute; left: 64px; top: 122px; }
+.logo { display: flex; align-items: center; gap: 20px; }
+.logo img { width: 80px; height: 80px; }
+h1 { font-weight: 750; font-size: 72px; letter-spacing: -0.045em; line-height: 1; color: #f8fafc; }
+h1 span { color: #5eead4; }
+.tag { margin-top: 24px; font-size: 25px; font-weight: 500; color: #e2e8f0; letter-spacing: -0.01em; }
+.tag em { font-family: N, serif; font-style: italic; font-weight: 500; font-size: 28px; color: #5eead4; }
+.sub { margin-top: 18px; max-width: 560px; font-family: GM, monospace; font-size: 13px; line-height: 1.9; letter-spacing: .18em; color: #94a3b8; }
+.flow { position: absolute; left: 664px; display: flex; align-items: center; gap: 10px; }
+.card { width: 92px; height: 112px; border-radius: 14px; border: 1.5px solid rgba(94, 234, 212, .55); background: rgba(8, 20, 28, .75);
+  box-shadow: 0 0 22px rgba(45, 212, 191, .18), inset 0 0 18px rgba(45, 212, 191, .06); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.card.v { border-color: rgba(167, 139, 250, .6); box-shadow: 0 0 22px rgba(139, 92, 246, .22), inset 0 0 18px rgba(139, 92, 246, .08); }
+.card .g { font-family: N, serif; font-style: italic; font-size: 27px; color: #5eead4; line-height: 1; white-space: nowrap; }
+.card.v .g { color: #c4b5fd; }
+.card .t { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+.arr { color: #5eead4; font-size: 20px; opacity: .85; }
+.plot { position: absolute; left: 1040px; top: 100px; width: 214px; height: 260px; border-radius: 14px; border: 1.5px solid rgba(226, 232, 240, .65); background: rgba(5, 8, 12, .6); box-shadow: 0 0 30px rgba(99,102,241,.25); }
+.plot svg { position: absolute; inset: 0; }
+</style></head>
+<body><div class="b"><div class="dots"></div>
+  <div class="left">
+    <div class="logo"><img src="icon.svg" alt=""><h1>OpenRisk<span>Sim</span></h1></div>
+    <div class="tag" data-es="Simulación de riesgo, &lt;em&gt;en tu navegador.&lt;/em&gt;" data-en="Risk simulation, &lt;em&gt;in your browser.&lt;/em&gt;"></div>
+    <div class="sub" data-es="MONTE CARLO · LATIN HYPERCUBE · CORRELACIONES&lt;br&gt;PRONÓSTICO · OPTIMIZACIÓN · VAN · TIR" data-en="MONTE CARLO · LATIN HYPERCUBE · CORRELATIONS&lt;br&gt;FORECASTING · OPTIMIZATION · NPV · IRR"></div>
+  </div>
+  <div class="flow" style="top: 140px">
+    <div class="card"><div class="g">.xlsx</div><div class="t" data-es="Tu modelo" data-en="Your model"></div></div><span class="arr">→</span>
+    <div class="card"><div class="g">X ~ 𝒩</div><div class="t" data-es="Supuestos" data-en="Assumptions"></div></div><span class="arr">→</span>
+    <div class="card v"><div class="g">10⁴ ×</div><div class="t" data-es="Simular" data-en="Simulate"></div></div>
+  </div>
+  <div class="flow" style="top: 290px">
+    <div class="card v"><div class="g">P(·)</div><div class="t" data-es="Certeza" data-en="Certainty"></div></div><span class="arr">→</span>
+    <div class="card"><div class="g">ŷₜ₊ₕ</div><div class="t" data-es="Pronóstico" data-en="Forecast"></div></div><span class="arr">→</span>
+    <div class="card v"><div class="g">max</div><div class="t" data-es="Optimizar" data-en="Optimize"></div></div>
+  </div>
+  <div class="plot"><svg viewBox="0 0 214 260" id="hist"></svg></div>
+</div>
+<script>
+  // ?lang=en | es  (default es)
+  const lang = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'es'
+  document.documentElement.lang = lang
+  for (const el of document.querySelectorAll('[data-es]')) el.innerHTML = el.dataset[lang]
+
+  // Histogram of a normal-ish NPV distribution with a two-tail 90 % certainty band.
+  const svg = document.getElementById('hist')
+  const ns = 'http://www.w3.org/2000/svg'
+  const add = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e }
+  const x0 = 16, x1 = 198, base = 214, yTop = 70, bins = 22
+  const pdf = (z) => Math.exp(-0.5 * z * z) * (1 + 0.18 * z * Math.exp(-0.3 * z * z))
+  for (let i = 0; i < 4; i++) add('path', { d: `M${x0} ${yTop + i * 36}H${x1}`, stroke: 'rgba(148,163,184,.12)' })
+  const w = (x1 - x0) / bins
+  for (let i = 0; i < bins; i++) {
+    const z = -3 + (i + 0.5) * 6 / bins
+    const h = (base - yTop) * pdf(z)
+    const inBand = z > -1.65 && z < 1.65
+    add('rect', { x: x0 + i * w + 1, y: base - h, width: w - 2, height: h, rx: 1.5, fill: inBand ? '#2dd4bf' : '#475569', opacity: inBand ? .95 : .8 })
+  }
+  const zx = (z) => x0 + (z + 3) / 6 * (x1 - x0)
+  for (const z of [-1.65, 1.65]) add('path', { d: `M${zx(z)} ${yTop - 14}V${base}`, stroke: '#fbbf24', 'stroke-width': 2, 'stroke-dasharray': '4 4' })
+  add('path', { d: `M${x0 - 4} ${base}H${x1 + 4}`, stroke: 'rgba(203,213,225,.6)', 'stroke-width': 1.5 })
+  const t1 = add('text', { x: 16, y: 28, fill: '#94a3b8', 'font-family': 'GM, monospace', 'font-size': 11 }); t1.textContent = lang === 'es' ? 'VAN · 10 000 pruebas' : 'NPV · 10,000 trials'
+  const t2 = add('text', { x: 16, y: 44, fill: '#5eead4', 'font-family': 'GM, monospace', 'font-size': 11 }); t2.textContent = lang === 'es' ? 'P(VAN ≥ 0) = 78,4 %' : 'P(NPV ≥ 0) = 78.4%'
+  const t3 = add('text', { x: 107, y: 244, fill: '#fbbf24', 'font-family': 'GM, monospace', 'font-size': 10, 'text-anchor': 'middle' }); t3.textContent = lang === 'es' ? 'certeza 90 %' : '90% certainty'
+</script>
+</body></html>

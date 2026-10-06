@@ -75,5 +75,10 @@ export function fmtCompact(v: number, locale: Locale = "es"): string {
   if (a >= 1e9) return fmt(v / 1e9, 2, locale) + (locale === "es" ? " MM" : "B");
   if (a >= 1e6) return fmt(v / 1e6, 2, locale) + " M";
   if (a >= 1e4) return fmt(v / 1e3, 1, locale) + " k";
+  // Densities of wide distributions are tiny (e.g. 5e-6): keep 2 significant digits instead of rounding to 0.
+  if (a > 0 && a < 1e-3) {
+    const [m, e] = v.toExponential(1).split("e");
+    return `${locale === "es" ? m.replace(".", ",") : m}e${e}`;
+  }
   return fmt(v, a < 1 ? 3 : 2, locale);
 }

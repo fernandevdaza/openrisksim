@@ -20,7 +20,8 @@
     "@openrisksim/finance": "workspace:*",
     "hyperformula": "^3.4.0",
     "exceljs": "^4.4.0",
-    "papaparse": "^5.4.1"
+    "papaparse": "^5.4.1",
+    "@openrisksim/accel": "workspace:*"
   },
   "devDependencies": {
     "@types/papaparse": "^5.3.15"

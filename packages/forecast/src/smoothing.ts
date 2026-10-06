@@ -5,7 +5,7 @@
  * Nelder–Mead; initial states use the classical heuristics (no state optimisation).
  */
 import { leastSquares } from "./linalg";
-import { assembleOutput, mean, residualSigma, validateSeries, type ForecastOutput } from "./metrics";
+import { assembleOutput, mean, normalizeLevels, residualSigma, validateSeries, type ForecastOutput, type IntervalOptions } from "./metrics";
 import { minimize } from "./optim";
 
 type Season = "none" | "additive" | "multiplicative";
@@ -206,7 +206,9 @@ function fitEts(
   spec: EtsSpec,
   fixed: Partial<EtsParams>,
   method: string,
+  levels?: number[],
 ): ForecastOutput {
+  const lv = normalizeLevels(levels);
   const init = initialStates(y, spec);
   const names: ParamName[] = ["alpha"];
   if (spec.trend) names.push("beta");
@@ -255,14 +257,15 @@ function fitEts(
     out.period = spec.m;
   }
   if (spec.damped) out.phi = params.phi;
-  return assembleOutput(method, out, y, run.fitted, forecast, sd, k);
+  return assembleOutput(method, out, y, run.fitted, forecast, sd, k, lv);
 }
 
 /**
  * Simple moving average of the last `window` observations; one-step fitted values are the
  * average of the preceding window (NaN for t < window). Flat forecast; intervals ≈ σ·√h.
  */
-export function movingAverage(y: number[], h: number, window: number): ForecastOutput {
+export function movingAverage(y: number[], h: number, window: number, opts: IntervalOptions = {}): ForecastOutput {
+  const lv = normalizeLevels(opts.levels);
   const w = Math.max(1, Math.round(window));
   validateSeries(y, w + 1, "movingAverage");
   const n = y.length;
@@ -277,20 +280,20 @@ export function movingAverage(y: number[], h: number, window: number): ForecastO
   const sigma = residualSigma(residuals, 0);
   const forecast = new Array<number>(h).fill(last);
   const sd = forecast.map((_, i) => sigma * Math.sqrt(i + 1));
-  return assembleOutput("movingAverage", { window: w }, y, fitted, forecast, sd, 1);
+  return assembleOutput("movingAverage", { window: w }, y, fitted, forecast, sd, 1, lv);
 }
 
 /** Simple exponential smoothing (ETS(A,N,N)); alpha optimised by SSE when omitted. */
-export function simpleExponentialSmoothing(y: number[], h: number, alpha?: number): ForecastOutput {
+export function simpleExponentialSmoothing(y: number[], h: number, alpha?: number, opts: IntervalOptions = {}): ForecastOutput {
   validateSeries(y, 2, "simpleExponentialSmoothing");
-  return fitEts(y, h, { trend: false, damped: false, season: "none", m: 1 }, { alpha }, "ses");
+  return fitEts(y, h, { trend: false, damped: false, season: "none", m: 1 }, { alpha }, "ses", opts.levels);
 }
 
 /** Holt's linear trend (optionally damped: ETS(A,Ad,N)). Unspecified parameters are optimised. */
 export function holt(
   y: number[],
   h: number,
-  opts: { alpha?: number; beta?: number; damped?: boolean; phi?: number } = {},
+  opts: { alpha?: number; beta?: number; damped?: boolean; phi?: number } & IntervalOptions = {},
 ): ForecastOutput {
   validateSeries(y, 3, "holt");
   const damped = !!opts.damped || opts.phi !== undefined;
@@ -300,6 +303,7 @@ export function holt(
     { trend: true, damped, season: "none", m: 1 },
     { alpha: opts.alpha, beta: opts.beta, phi: opts.phi },
     damped ? "holtDamped" : "holt",
+    opts.levels,
   );
 }
 
@@ -308,7 +312,7 @@ export function holtWinters(
   y: number[],
   h: number,
   period: number,
-  opts: { seasonal?: "additive" | "multiplicative"; alpha?: number; beta?: number; gamma?: number } = {},
+  opts: { seasonal?: "additive" | "multiplicative"; alpha?: number; beta?: number; gamma?: number } & IntervalOptions = {},
 ): ForecastOutput {
   const m = Math.round(period);
   if (m < 2) throw new Error("holtWinters: period must be ≥ 2");
@@ -322,5 +326,6 @@ export function holtWinters(
     { trend: true, damped: false, season: seasonal, m },
     { alpha: opts.alpha, beta: opts.beta, gamma: opts.gamma },
     seasonal === "additive" ? "holtWintersAdditive" : "holtWintersMultiplicative",
+    opts.levels,
   );
 }

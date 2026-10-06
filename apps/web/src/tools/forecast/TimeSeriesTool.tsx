@@ -2,7 +2,7 @@
  * Time-series forecasting: smoothing, Holt–Winters, ARIMA, trend lines, automatic selection,
  * plus ACF/PACF, decomposition and stationarity diagnostics.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, LoaderCircle } from "lucide-react";
 import {
   autoForecast,
@@ -28,6 +28,8 @@ import { ErrorNote, ExportButton, HelpBox, Note, NumField, Section, SplitLayout,
 import { fmt, fmtAuto, fmtPEq, fmtPct } from "../common/format";
 import { correlogramOption, forecastBandOption, lineOption } from "../common/charts";
 import { ToolError } from "../common/workbook";
+import { levelNumber } from "../../lib/certainty";
+import { ConfidenceLevels } from "./ConfidenceLevels";
 
 type Method = "auto" | "ma" | "ses" | "holt" | "damped" | "hwAdd" | "hwMult" | "arima" | "autoArima" | "trend";
 type TrendKind = "linear" | "exponential" | "logarithmic" | "power" | "polynomial2" | "polynomial3";
@@ -40,6 +42,8 @@ interface Res {
   out: ForecastOutput;
   ranking: { method: string; rmse: number; aic?: number }[] | null;
   period: number;
+  /** Confidence levels the intervals were computed for (ascending). */
+  levels: number[];
 }
 
 export default function TimeSeriesTool(_props: { onClose(): void }) {
@@ -51,6 +55,7 @@ export default function TimeSeriesTool(_props: { onClose(): void }) {
   const [windowSize, setWindow] = useState(3);
   const [order, setOrder] = useState({ p: 1, d: 1, q: 1 });
   const [trend, setTrend] = useState<TrendKind>("linear");
+  const [levels, setLevels] = useState<number[]>([0.8, 0.95]);
   const [res, setRes] = useState<Res | null>(null);
   const [tab, setTab] = useState<ResultTab>("forecast");
   const [error, setError] = useState<unknown>(null);
@@ -77,47 +82,61 @@ export default function TimeSeriesTool(_props: { onClose(): void }) {
       if (method === "hwMult" && y.some((v) => v <= 0)) throw new ToolError("timeSeries.errors.positive");
       let out: ForecastOutput;
       let ranking: Res["ranking"] = null;
+      const lv = { levels };
       switch (method) {
         case "auto": {
-          const r = autoForecast(y, H, P > 1 ? P : undefined);
+          const r = autoForecast(y, H, P > 1 ? P : undefined, lv);
           out = r.best;
           ranking = r.ranking;
           break;
         }
         case "ma":
-          out = movingAverage(y, H, Math.max(1, Math.round(windowSize)));
+          out = movingAverage(y, H, Math.max(1, Math.round(windowSize)), lv);
           break;
         case "ses":
-          out = simpleExponentialSmoothing(y, H);
+          out = simpleExponentialSmoothing(y, H, undefined, lv);
           break;
         case "holt":
-          out = holt(y, H);
+          out = holt(y, H, lv);
           break;
         case "damped":
-          out = holt(y, H, { damped: true });
+          out = holt(y, H, { damped: true, ...lv });
           break;
         case "hwAdd":
-          out = holtWinters(y, H, P, { seasonal: "additive" });
+          out = holtWinters(y, H, P, { seasonal: "additive", ...lv });
           break;
         case "hwMult":
-          out = holtWinters(y, H, P, { seasonal: "multiplicative" });
+          out = holtWinters(y, H, P, { seasonal: "multiplicative", ...lv });
           break;
         case "arima":
-          out = arima(y, H, { p: Math.round(order.p), d: Math.round(order.d), q: Math.round(order.q) });
+          out = arima(y, H, { p: Math.round(order.p), d: Math.round(order.d), q: Math.round(order.q) }, lv);
           break;
         case "autoArima":
-          out = autoArima(y, H);
+          out = autoArima(y, H, lv);
           break;
         case "trend":
-          out = trendForecast(y, H, trend);
+          out = trendForecast(y, H, trend, lv);
           break;
       }
-      setRes({ y, out, ranking, period: P });
+      setRes({ y, out, ranking, period: P, levels: out.intervals.map((i) => i.level) });
     } catch (e) {
       setRes(null);
       setError(e);
     }
   };
+
+  // Changing the confidence levels after a run recomputes the intervals with the same inputs.
+  const firstLevels = useRef(true);
+  useEffect(() => {
+    if (firstLevels.current) {
+      firstLevels.current = false;
+      return;
+    }
+    if (res) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [levels]);
+
+  const lvl = (level: number) => levelNumber(level, locale);
 
   const fcChart = useMemo(() => {
     if (!res) return null;
@@ -126,11 +145,8 @@ export default function TimeSeriesTool(_props: { onClose(): void }) {
       actual: res.y,
       fitted: o.fitted,
       forecast: o.forecast,
-      lower80: o.lower80,
-      upper80: o.upper80,
-      lower95: o.lower95,
-      upper95: o.upper95,
-      labels: { actual: t("timeSeries.actual"), fitted: t("timeSeries.fitted"), forecast: t("timeSeries.forecast"), band80: t("timeSeries.band80"), band95: t("timeSeries.band95"), period: t("timeSeries.period") },
+      bands: o.intervals.map((iv) => ({ ...iv, label: t("timeSeries.bandLevel", { level: levelNumber(iv.level, locale) }) })),
+      labels: { actual: t("timeSeries.actual"), fitted: t("timeSeries.fitted"), forecast: t("timeSeries.forecast"), period: t("timeSeries.period") },
       locale,
     });
   }, [res, locale, t]);
@@ -193,6 +209,7 @@ export default function TimeSeriesTool(_props: { onClose(): void }) {
           <Select value={trend} onChange={setTrend} options={TRENDS.map((x) => ({ value: x, label: t(`timeSeries.trends.${x}`) }))} />
         </Field>
       )}
+      <ConfidenceLevels value={levels} onChange={setLevels} max={3} />
       <Button variant="primary" onClick={run} disabled={running}>
         {running ? <LoaderCircle size={14} className="animate-spin" /> : <Play size={14} />}
         {running ? t("common.computing") : t("timeSeries.run")}
@@ -231,12 +248,23 @@ export default function TimeSeriesTool(_props: { onClose(): void }) {
                       sheetName={t("timeSeries.sheetName")}
                       build={() => {
                         const o = res.out;
+                        // outer → inner lower bounds, then inner → outer upper bounds
+                        const lowers = [...o.intervals].reverse();
+                        const uppers = o.intervals;
                         const rows: (number | string | null)[][] = [
                           [t("timeSeries.chartTitle", { method: methodLabel(o.method) })],
-                          [t("timeSeries.period"), t("timeSeries.actual"), t("timeSeries.fitted"), t("timeSeries.forecast"), t("timeSeries.lower95"), t("timeSeries.lower80"), t("timeSeries.upper80"), t("timeSeries.upper95")],
+                          [
+                            t("timeSeries.period"),
+                            t("timeSeries.actual"),
+                            t("timeSeries.fitted"),
+                            t("timeSeries.forecast"),
+                            ...lowers.map((iv) => t("timeSeries.lowerLevel", { level: lvl(iv.level) })),
+                            ...uppers.map((iv) => t("timeSeries.upperLevel", { level: lvl(iv.level) })),
+                          ],
                         ];
-                        res.y.forEach((v, i) => rows.push([i + 1, v, Number.isFinite(o.fitted[i]) ? o.fitted[i] : null, null, null, null, null, null]));
-                        o.forecast.forEach((v, i) => rows.push([res.y.length + i + 1, null, null, v, o.lower95[i], o.lower80[i], o.upper80[i], o.upper95[i]]));
+                        const blanks = o.intervals.map(() => null);
+                        res.y.forEach((v, i) => rows.push([i + 1, v, Number.isFinite(o.fitted[i]) ? o.fitted[i] : null, null, ...blanks, ...blanks]));
+                        o.forecast.forEach((v, i) => rows.push([res.y.length + i + 1, null, null, v, ...lowers.map((iv) => iv.lower[i]), ...uppers.map((iv) => iv.upper[i])]));
                         return rows;
                       }}
                     />
@@ -256,12 +284,53 @@ export default function TimeSeriesTool(_props: { onClose(): void }) {
                     ]}
                   />
                 )}
+                {res.out.forecast.length > 0 && (
+                  <Note tone="good">
+                    {res.out.intervals.map((iv) => (
+                      <p key={iv.level}>
+                        {t("timeSeries.interpretInterval", {
+                          level: lvl(iv.level),
+                          period: res.y.length + 1,
+                          lo: fmtAuto(iv.lower[0], locale),
+                          hi: fmtAuto(iv.upper[0], locale),
+                        })}
+                      </p>
+                    ))}
+                    {res.out.forecast.length > 1 && res.out.intervals.length > 0 && (
+                      <p>
+                        {t("timeSeries.interpretWiden", {
+                          level: lvl(res.out.intervals[res.out.intervals.length - 1].level),
+                          period: res.y.length + res.out.forecast.length,
+                          lo: fmtAuto(res.out.intervals[res.out.intervals.length - 1].lower[res.out.forecast.length - 1], locale),
+                          hi: fmtAuto(res.out.intervals[res.out.intervals.length - 1].upper[res.out.forecast.length - 1], locale),
+                        })}
+                      </p>
+                    )}
+                  </Note>
+                )}
                 <Note>
                   <p>{t("timeSeries.interpretMetrics")}</p>
                   {m && Number.isFinite(m.theilU) && <p>{m.theilU < 1 ? t("timeSeries.theilGood") : t("timeSeries.theilBad")}</p>}
                 </Note>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Section title={t("timeSeries.params")}>
+                <Section title={t("timeSeries.forecastTable")}>
+                  <Table
+                    maxHeight={260}
+                    columns={[
+                      { key: "t", label: t("timeSeries.period"), align: "right" },
+                      ...[...res.out.intervals].reverse().map((iv, j) => ({ key: `l${j}`, label: t("timeSeries.lowShort", { level: lvl(iv.level) }), align: "right" as const })),
+                      { key: "f", label: t("timeSeries.forecast"), align: "right" },
+                      ...res.out.intervals.map((iv, j) => ({ key: `u${j}`, label: t("timeSeries.highShort", { level: lvl(iv.level) }), align: "right" as const })),
+                    ]}
+                    rows={res.out.forecast.map((f, i) => {
+                      const row: Record<string, string | number> = { t: res.y.length + i + 1, f: fmtAuto(f, locale) };
+                      [...res.out.intervals].reverse().forEach((iv, j) => (row[`l${j}`] = fmtAuto(iv.lower[i], locale)));
+                      res.out.intervals.forEach((iv, j) => (row[`u${j}`] = fmtAuto(iv.upper[i], locale)));
+                      return row;
+                    })}
+                  />
+                </Section>
+                <Section title={t("timeSeries.params")}>
+                  <div className="grid items-start gap-4 md:grid-cols-2">
                     <Table
                       columns={[
                         { key: "k", label: t("timeSeries.param") },
@@ -283,25 +352,8 @@ export default function TimeSeriesTool(_props: { onClose(): void }) {
                         ]}
                       />
                     )}
-                  </Section>
-                  <Section title={t("timeSeries.forecastTable")}>
-                    <Table
-                      maxHeight={260}
-                      columns={[
-                        { key: "t", label: t("timeSeries.period"), align: "right" },
-                        { key: "f", label: t("timeSeries.forecast"), align: "right" },
-                        { key: "l", label: t("timeSeries.lower95"), align: "right" },
-                        { key: "u", label: t("timeSeries.upper95"), align: "right" },
-                      ]}
-                      rows={res.out.forecast.map((f, i) => ({
-                        t: res.y.length + i + 1,
-                        f: fmtAuto(f, locale),
-                        l: fmtAuto(res.out.lower95[i], locale),
-                        u: fmtAuto(res.out.upper95[i], locale),
-                      }))}
-                    />
-                  </Section>
-                </div>
+                  </div>
+                </Section>
                 {res.ranking && (
                   <Section title={t("timeSeries.ranking")}>
                     <Table

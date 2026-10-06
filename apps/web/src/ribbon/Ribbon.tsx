@@ -21,6 +21,7 @@ import {
   PanelRight,
   Play,
   Rocket,
+  Github,
   RotateCcw,
   Save,
   Settings,
@@ -39,6 +40,12 @@ import { useModelStore } from "../store/model";
 import { actions } from "../actions";
 import { TOOLS } from "../tools/registry";
 import { tr } from "../lib/modelText";
+
+const DOCS_URL = "https://fernandevdaza.github.io/openrisksim/docs/";
+const REPO_URL = "https://github.com/fernandevdaza/openrisksim";
+function openExternal(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 const TABS: RibbonTabId[] = ["file", "simulation", "analysis", "forecast", "optimization", "finance", "help"];
 
@@ -72,7 +79,7 @@ export function RibbonButton({
       className={clsx(
         "rounded text-slate-800 transition-colors hover:bg-blue-100 disabled:pointer-events-none disabled:opacity-40 dark:text-slate-100 dark:hover:bg-slate-700",
         active && "bg-blue-100 ring-1 ring-blue-300 dark:bg-slate-700 dark:ring-slate-500",
-        big ? "flex w-[68px] flex-col items-center gap-1 px-1 py-1 text-[11px] leading-tight" : "flex items-center gap-1.5 px-1.5 py-0.5 text-[11.5px]",
+        big ? "flex min-w-[64px] max-w-[96px] shrink-0 flex-col items-center gap-1 px-1 py-1 text-[11px] leading-tight" : "flex items-center gap-1.5 px-1.5 py-0.5 text-[11.5px]",
       )}
     >
       <Icon size={big ? 22 : 15} strokeWidth={big ? 1.6 : 1.8} className={clsx("shrink-0", iconClass ?? "text-blue-800 dark:text-blue-300")} />
@@ -229,13 +236,15 @@ function ToolsTab({ tab }: { tab: "analysis" | "forecast" | "optimization" | "fi
 }
 
 function HelpTab() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   return (
     <Group label={t("ribbon.help")}>
       <RibbonButton icon={Rocket} label={t("help.quickstart")} onClick={() => actions.help("quickstart")} />
       <RibbonButton icon={BookA} label={t("help.glossary")} onClick={() => actions.help("glossary")} />
       <RibbonButton icon={Keyboard} label={t("help.shortcuts")} onClick={() => actions.help("shortcuts")} />
       <RibbonButton icon={Info} label={t("help.about")} onClick={() => actions.help("about")} />
+      <RibbonButton icon={BookOpen} label={t("help.docs")} onClick={() => openExternal(DOCS_URL + (i18n.language === "en" ? "en/" : ""))} />
+      <RibbonButton icon={Github} label={t("help.github")} onClick={() => openExternal(REPO_URL)} />
     </Group>
   );
 }

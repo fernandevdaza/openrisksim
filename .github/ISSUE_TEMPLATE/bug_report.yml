@@ -1,0 +1,49 @@
+name: "🐞 Error / Bug report"
+description: "Algo no funciona o un resultado es incorrecto · Something is broken or a result is wrong"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ¡Gracias por reportar! Puedes escribir en español o inglés. · Thanks for reporting! Spanish or English are fine.
+        Si el problema es con un archivo, adjunta el `.xlsx` (sin datos confidenciales). · If it involves a file, attach the `.xlsx` (no confidential data).
+  - type: textarea
+    id: what
+    attributes:
+      label: "¿Qué pasó? · What happened?"
+      description: "Incluye el mensaje de error si aparece uno. · Include the error message, if any."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Pasos para reproducirlo · Steps to reproduce"
+      placeholder: |
+        1. Archivo → Ejemplos → Evaluación de proyecto
+        2. Simulación → Ejecutar
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "¿Qué esperabas? · What did you expect?"
+      description: "Para errores numéricos, indica el valor correcto y su fuente (Excel, R, libro…). · For numerical bugs, give the expected value and its source (Excel, R, textbook…)."
+  - type: input
+    id: browser
+    attributes:
+      label: "Navegador y sistema · Browser and OS"
+      placeholder: "Chrome 140 · macOS 26"
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Área · Area"
+      options:
+        - "Simulación / resultados · Simulation / results"
+        - "Hoja de cálculo / archivos · Spreadsheet / files"
+        - "Herramientas analíticas · Analytical tools"
+        - "Pronóstico · Forecasting"
+        - "Optimización · Optimization"
+        - "Finanzas · Finance"
+        - "Documentación · Documentation"
+        - "Otro · Other"
