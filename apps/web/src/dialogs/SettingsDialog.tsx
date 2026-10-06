@@ -55,15 +55,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             )
           }
         >
-          <div className="flex items-center gap-2">
-            <NumberInput className="w-32" max={MAX_TRIALS} value={s.trials} onChange={(v) => setS({ ...s, trials: Math.round(v) })} />
-            <div className="flex flex-wrap gap-1">
+          <div className="flex items-center gap-2 max-md:flex-col max-md:items-stretch">
+            <NumberInput className="w-32 max-md:w-full" max={MAX_TRIALS} value={s.trials} onChange={(v) => setS({ ...s, trials: Math.round(v) })} />
+            <div className="flex flex-wrap gap-1 max-md:gap-1.5">
               {TRIAL_PRESETS.map((n) => (
                 <button
                   key={n}
                   type="button"
                   onClick={() => setS({ ...s, trials: n })}
-                  className={`rounded border px-1.5 py-0.5 text-xs ${s.trials === n ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800"}`}
+                  className={`rounded border px-1.5 py-0.5 text-xs max-md:min-h-9 max-md:min-w-14 max-md:px-3 max-md:text-[13px] ${s.trials === n ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800"}`}
                 >
                   {n >= 1_000_000 ? `${n / 1_000_000} M` : n.toLocaleString()}
                 </button>

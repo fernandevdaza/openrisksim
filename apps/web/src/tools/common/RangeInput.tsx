@@ -92,7 +92,7 @@ export function DataSourceInput({
   return (
     <div className="space-y-1.5">
       {label && <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{label}</div>}
-      <div className="flex gap-1" role="radiogroup">
+      <div className="flex flex-wrap gap-1 max-md:gap-1.5" role="radiogroup">
         {modes.map((m) => (
           <button
             key={m.id}
@@ -101,7 +101,7 @@ export function DataSourceInput({
             aria-checked={value.mode === m.id}
             onClick={() => set({ mode: m.id })}
             className={clsx(
-              "rounded-md border px-2 py-0.5 text-xs",
+              "rounded-md border px-2 py-0.5 text-xs max-md:min-h-9 max-md:px-3 max-md:text-[13px]",
               value.mode === m.id
                 ? "border-blue-700 bg-blue-700 text-white"
                 : "border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800",

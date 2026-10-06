@@ -328,7 +328,18 @@
     "footer": "Generated with OpenRiskSim (free software, GPL-3.0). Monte Carlo simulation results are estimates and depend on the model assumptions."
   },
   "welcome": {
-    "text": "Welcome to OpenRiskSim: open your .xlsx workbook (or drag it here), or start with a project-evaluation example."
+    "text": "Welcome to OpenRiskSim: open your .xlsx workbook (or drag it here), or start with a project-evaluation example.",
+    "short": "Open your .xlsx workbook or start with a project-evaluation example."
+  },
+  "mobile": {
+    "nav": "Main navigation",
+    "sheet": "Sheet",
+    "model": "Model",
+    "run": "Run",
+    "stop": "Stop",
+    "results": "Results",
+    "define": "Define",
+    "definitions": "{{n}} definitions in the model"
   },
   "help": {
     "title": "Help",

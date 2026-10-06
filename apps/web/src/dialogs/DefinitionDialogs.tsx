@@ -136,7 +136,7 @@ export function ForecastDialog({ cell, id, onClose }: { cell: CellRef; id?: stri
 /** Quick 80/90/95/99 % buttons under a percentage input. */
 function PresetChips({ value, onPick, label }: { value: number; onPick: (pct: number) => void; label: string }) {
   return (
-    <div className="flex gap-1" role="group" aria-label={label}>
+    <div className="flex flex-wrap gap-1" role="group" aria-label={label}>
       {LEVEL_PRESETS.map((p) => {
         const pct = Math.round(p * 100);
         const on = Math.abs(value - pct) < 1e-9;
@@ -145,7 +145,7 @@ function PresetChips({ value, onPick, label }: { value: number; onPick: (pct: nu
             key={p}
             type="button"
             aria-pressed={on}
-            className={`rounded-full border px-1.5 py-0 text-[11px] tabular-nums ${on ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"}`}
+            className={`rounded-full border px-1.5 py-0 text-[11px] tabular-nums max-md:min-h-8 max-md:px-2.5 max-md:text-[13px] ${on ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"}`}
             onClick={() => onPick(pct)}
           >
             {pct}

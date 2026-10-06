@@ -9,6 +9,7 @@ import { sortedFinite } from "../lib/certainty";
 import { ForecastWindow } from "./ForecastWindow";
 import { overlayOption } from "./charts";
 import { BackendBadge } from "./BackendBadge";
+import { useIsMobile } from "../lib/responsive";
 
 /** Right dock with one tab per forecast window + overlay chart. */
 export function ResultsDock() {
@@ -22,6 +23,7 @@ export function ResultsDock() {
   const status = useSimulationStore((s) => s.status);
   const locale = useUiStore((s) => s.locale);
   const forecasts = useMemo(() => (resultModel?.forecasts ?? []).filter((f) => result?.forecasts[f.id]), [result, resultModel]);
+  const mobile = useIsMobile();
 
   if (!open) return null;
 
@@ -44,20 +46,32 @@ export function ResultsDock() {
   const validTab = tab === "overlay" || (activeForecast && forecasts.some((f) => f.id === activeForecast)) ? tab : forecasts[0] ? `fc:${forecasts[0].id}` : "overlay";
 
   return (
-    <aside className="relative flex shrink-0 flex-col border-l border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900" style={{ width: `min(${width}px, 60vw)` }} aria-label={t("results.title")}>
-      <div className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-blue-400/30" onMouseDown={onResize} aria-hidden />
-      <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-100 px-2 py-1 dark:border-slate-700 dark:bg-slate-800">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{t("results.title")}</span>
+    <aside
+      className={clsx(
+        "flex flex-col bg-white dark:bg-slate-900",
+        // phones: full-screen sheet above the sheet area, ending at the bottom navigation
+        mobile ? "ors-slide-up fixed inset-x-0 top-0 bottom-[var(--bottom-nav-h)] z-30 pt-[env(safe-area-inset-top)]" : "relative shrink-0 border-l border-slate-300 dark:border-slate-700",
+      )}
+      style={mobile ? undefined : { width: `min(${width}px, 60vw)` }}
+      aria-label={t("results.title")}
+    >
+      {!mobile && <div className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-blue-400/30" onMouseDown={onResize} aria-hidden />}
+      <div className={clsx("flex items-center gap-1 border-b border-slate-200 bg-slate-100 px-2 py-1 dark:border-slate-700 dark:bg-slate-800", mobile && "min-h-12 pl-3 pr-1")}>
+        <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{t("results.title")}</span>
         {result?.backend && (
-          <span className="ml-2 flex min-w-0 items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300" data-testid="run-summary">
+          <span className="ml-2 flex min-w-0 items-center gap-1.5 overflow-hidden text-[11px] text-slate-600 dark:text-slate-300" data-testid="run-summary">
             <span className="shrink-0 tabular-nums">
-              {t("results.trialsN", { n: result.trials.toLocaleString(locale) })} · {(result.elapsedMs / 1000).toFixed(2)} s ·
+              {t("results.trialsN", { n: result.trials.toLocaleString(locale) })} · {(result.elapsedMs / 1000).toFixed(2)} s{!mobile && " ·"}
             </span>{" "}
-            <BackendBadge backend={result.backend} showRate={false} />
+            {!mobile && <BackendBadge backend={result.backend} showRate={false} />}
           </span>
         )}
-        <button className="ml-auto rounded p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700" aria-label={t("common.close")} onClick={() => useUiStore.getState().setResultsOpen(false)}>
-          <X size={14} />
+        <button
+          className={clsx("ml-auto shrink-0 rounded p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700", mobile && "flex h-10 w-10 items-center justify-center")}
+          aria-label={t("common.close")}
+          onClick={() => useUiStore.getState().setResultsOpen(false)}
+        >
+          <X size={mobile ? 18 : 14} />
         </button>
       </div>
       {!result || !resultModel ? (
@@ -72,7 +86,7 @@ export function ResultsDock() {
         </div>
       ) : (
         <>
-          <div className="flex gap-0.5 overflow-x-auto border-b border-slate-200 px-1 pt-1 dark:border-slate-700" role="tablist">
+          <div className="no-scrollbar-mobile flex shrink-0 gap-0.5 overflow-x-auto border-b border-slate-200 px-1 pt-1 dark:border-slate-700" role="tablist">
             {forecasts.map((f) => (
               <button
                 key={f.id}
@@ -80,7 +94,7 @@ export function ResultsDock() {
                 aria-selected={validTab === `fc:${f.id}`}
                 onClick={() => useUiStore.getState().setResultsTab(`fc:${f.id}`)}
                 className={clsx(
-                  "max-w-[160px] truncate rounded-t border border-b-0 px-2 py-1 text-xs",
+                  "max-w-[160px] max-md:shrink-0 truncate rounded-t border border-b-0 px-2 py-1 text-xs max-md:px-3 max-md:py-2 max-md:text-[13px]",
                   validTab === `fc:${f.id}` ? "border-slate-300 bg-white font-semibold text-blue-800 dark:border-slate-600 dark:bg-slate-900 dark:text-blue-300" : "border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
                 )}
                 title={f.name}
@@ -93,7 +107,7 @@ export function ResultsDock() {
               aria-selected={validTab === "overlay"}
               onClick={() => useUiStore.getState().setResultsTab("overlay")}
               className={clsx(
-                "flex items-center gap-1 rounded-t border border-b-0 px-2 py-1 text-xs",
+                "flex max-md:shrink-0 items-center gap-1 rounded-t border border-b-0 px-2 py-1 text-xs max-md:px-3 max-md:py-2 max-md:text-[13px]",
                 validTab === "overlay" ? "border-slate-300 bg-white font-semibold text-blue-800 dark:border-slate-600 dark:bg-slate-900 dark:text-blue-300" : "border-transparent text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
               )}
             >
@@ -139,7 +153,7 @@ function OverlayPanel() {
     return overlayOption(series, view, locale, kind, theme === "dark", { frequency: t("results.frequency"), cumulative: t("results.cumulative") });
   }, [forecasts, selected, view, locale, theme, result, t]);
   return (
-    <div className="flex h-full flex-col gap-2 overflow-auto p-2">
+    <div className="flex h-full flex-col gap-2 overflow-auto p-2 max-md:px-3 max-md:pb-6">
       <p className="text-xs text-slate-600 dark:text-slate-400">{t("results.overlayHint")}</p>
       <div className="flex flex-wrap gap-1.5">
         {forecasts.map((f) => (

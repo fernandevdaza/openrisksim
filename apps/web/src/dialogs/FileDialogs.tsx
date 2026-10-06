@@ -127,6 +127,7 @@ export function ConfirmDialog({ title, message, confirmLabel, danger, onConfirm,
     <Modal
       open
       size="sm"
+      mobile="card"
       onClose={onClose}
       title={title}
       footer={

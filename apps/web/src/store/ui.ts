@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AssumptionDef, CellRef, DecisionVariableDef, ForecastDef } from "@openrisksim/core";
 import i18n, { detectLocale, persistLocale, type Locale } from "../i18n";
+import { COMPACT_QUERY, matches } from "../lib/responsive";
 
 export type Theme = "light" | "dark";
 export type RibbonTabId = "file" | "simulation" | "analysis" | "forecast" | "optimization" | "finance" | "help";
@@ -148,7 +149,8 @@ export const useUiStore = create<UiState>()((set, get) => ({
   setResultsTab: (t) => set({ resultsTab: t, resultsOpen: true }),
   dockWidth: 520,
   setDockWidth: (w) => set({ dockWidth: Math.round(Math.min(Math.max(w, 360), 1100)) }),
-  explorerOpen: true,
+  // on phones/tablets the explorer is a drawer: start closed there
+  explorerOpen: !matches(COMPACT_QUERY),
   setExplorerOpen: (v) => set({ explorerOpen: v }),
 
   defClipboard: null,

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChartColumn, ChevronDown, ChevronRight, Dices, Pencil, SlidersHorizontal, Target, Trash2, X } from "lucide-react";
 import type { CellRef } from "@openrisksim/core";
@@ -8,12 +8,13 @@ import { useUiStore } from "../store/ui";
 import { useSimulationStore } from "../store/simulation";
 import { useWorkbookStore } from "../store/workbook";
 import { describeSpec } from "../lib/modelText";
+import { useIsCompact } from "../lib/responsive";
 
 function Section({ title, count, icon, children, color }: { title: string; count: number; icon: ReactNode; children: ReactNode; color: string }) {
   const [open, setOpen] = useState(true);
   return (
     <div>
-      <button className="flex w-full items-center gap-1 px-2 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => setOpen(!open)} aria-expanded={open}>
+      <button className="flex w-full items-center gap-1 px-2 py-1 text-left text-[11px] font-semibold uppercase pointer-coarse:py-2 tracking-wide text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" onClick={() => setOpen(!open)} aria-expanded={open}>
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span className={color}>{icon}</span>
         {title}
@@ -30,15 +31,15 @@ function Item({ name, cell, detail, disabled, onEdit, onDelete, onOpen }: { name
   const sheet = useWorkbookStore((s) => s.activeSheet);
   const active = cursor === cell.address && sheet === cell.sheet;
   return (
-    <li className={clsx("group flex items-center gap-1 px-2 py-0.5 pl-6 text-[12px]", active ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-800/60")}>
+    <li className={clsx("group flex items-center gap-1 px-2 py-0.5 pl-6 text-[12px] pointer-coarse:py-1.5 pointer-coarse:text-[14px]", active ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-slate-50 dark:hover:bg-slate-800/60")}>
       <button className="min-w-0 flex-1 text-left" onClick={() => useUiStore.getState().jumpTo(cell)} onDoubleClick={onEdit} title={`${name}\n${cell.sheet}!${cell.address}${detail ? `\n${detail}` : ""}`}>
         <div className={clsx("truncate", disabled ? "text-slate-400 line-through" : "text-slate-800 dark:text-slate-100")}>{name}</div>
-        <div className="truncate font-mono text-[10px] text-slate-500 dark:text-slate-400">
+        <div className="truncate font-mono text-[10px] text-slate-500 dark:text-slate-400 pointer-coarse:text-[11.5px]">
           {cell.sheet}!{cell.address}
           {detail ? ` · ${detail}` : ""}
         </div>
       </button>
-      <div className="flex opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+      <div className="flex opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 [&>button]:pointer-coarse:p-2">
         {onOpen && (
           <button className="rounded p-0.5 text-slate-500 hover:bg-slate-200 hover:text-blue-700 dark:hover:bg-slate-700" onClick={onOpen} aria-label={t("explorer.openChart")} title={t("explorer.openChart")}>
             <ChartColumn size={13} />
@@ -61,16 +62,36 @@ export function ModelExplorer() {
   const locale = useUiStore((s) => s.locale);
   const model = useModelStore((s) => s.model);
   const result = useSimulationStore((s) => s.result);
+  const compact = useIsCompact();
+  // drawer mode (phones/tablets): Escape closes it
+  useEffect(() => {
+    if (!open || !compact) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && useUiStore.getState().setExplorerOpen(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [open, compact]);
   if (!open) return null;
   const ui = useUiStore.getState();
   const ms = useModelStore.getState();
   const s = model.settings;
-  return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900" aria-label={t("explorer.title")}>
-      <div className="flex items-center border-b border-slate-200 bg-slate-100 px-2 py-1 dark:border-slate-700 dark:bg-slate-800">
+  const aside = (
+    <aside
+      className={clsx(
+        "flex shrink-0 flex-col border-r border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900",
+        compact ? "ors-slide-left fixed inset-y-0 left-0 z-[46] w-[min(86vw,320px)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] shadow-2xl" : "w-56",
+      )}
+      aria-label={t("explorer.title")}
+      role={compact ? "dialog" : undefined}
+      aria-modal={compact ? true : undefined}
+    >
+      <div className={clsx("flex items-center border-b border-slate-200 bg-slate-100 px-2 py-1 dark:border-slate-700 dark:bg-slate-800", compact && "min-h-12")}>
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">{t("explorer.title")}</span>
-        <button className="ml-auto rounded p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700" aria-label={t("common.close")} onClick={() => ui.setExplorerOpen(false)}>
-          <X size={14} />
+        <button
+          className={clsx("ml-auto rounded p-1 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700", compact && "flex h-10 w-10 items-center justify-center")}
+          aria-label={t("common.close")}
+          onClick={() => ui.setExplorerOpen(false)}
+        >
+          <X size={compact ? 18 : 14} />
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto py-1">
@@ -116,7 +137,10 @@ export function ModelExplorer() {
         </Section>
       </div>
       <button
-        className="border-t border-slate-200 px-2 py-1.5 text-left text-[11px] text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+        className={clsx(
+          "border-t border-slate-200 px-2 py-1.5 text-left text-[11px] text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800",
+          compact && "py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] text-[12.5px]",
+        )}
         onClick={() => ui.openDialog({ type: "settings" })}
         title={t("sim.settings")}
       >
@@ -128,5 +152,12 @@ export function ModelExplorer() {
         </div>
       </button>
     </aside>
+  );
+  if (!compact) return aside;
+  return (
+    <>
+      <div className="fixed inset-0 z-[45] bg-black/40" onClick={() => ui.setExplorerOpen(false)} aria-hidden />
+      {aside}
+    </>
   );
 }

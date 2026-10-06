@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -80,25 +80,27 @@ export function RibbonButton({
         "rounded text-slate-800 transition-colors hover:bg-blue-100 disabled:pointer-events-none disabled:opacity-40 dark:text-slate-100 dark:hover:bg-slate-700",
         active && "bg-blue-100 ring-1 ring-blue-300 dark:bg-slate-700 dark:ring-slate-500",
         big ? "flex min-w-[64px] max-w-[96px] shrink-0 flex-col items-center gap-1 px-1 py-1 text-[11px] leading-tight" : "flex items-center gap-1.5 px-1.5 py-0.5 text-[11.5px]",
+        // phones: one row of compact icon-over-label buttons (big and small alike)
+        "max-md:min-w-[58px] max-md:max-w-none max-md:shrink-0 max-md:snap-start max-md:flex-col max-md:justify-center max-md:gap-0.5 max-md:px-1.5 max-md:py-1 max-md:text-[10.5px] max-md:leading-tight",
       )}
     >
-      <Icon size={big ? 22 : 15} strokeWidth={big ? 1.6 : 1.8} className={clsx("shrink-0", iconClass ?? "text-blue-800 dark:text-blue-300")} />
-      <span className={clsx(big ? "line-clamp-2 text-center" : "whitespace-nowrap")}>{label}</span>
+      <Icon size={big ? 22 : 15} strokeWidth={big ? 1.6 : 1.8} className={clsx("shrink-0 max-md:h-5 max-md:w-5", iconClass ?? "text-blue-800 dark:text-blue-300")} />
+      <span className={clsx(big ? "line-clamp-2 text-center" : "whitespace-nowrap", "max-md:line-clamp-none max-md:whitespace-nowrap")}>{label}</span>
     </button>
   );
 }
 
 function Group({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex shrink-0 flex-col border-r border-slate-200 px-1.5 dark:border-slate-700" role="group" aria-label={label}>
-      <div className="flex flex-1 items-start gap-0.5">{children}</div>
-      <div className="mt-0.5 select-none text-center text-[10px] text-slate-500 dark:text-slate-400">{label}</div>
+    <div className="flex shrink-0 flex-col border-r border-slate-200 px-1.5 dark:border-slate-700 max-md:px-1 max-md:last:border-r-0" role="group" aria-label={label}>
+      <div className="flex flex-1 items-start gap-0.5 max-md:items-stretch">{children}</div>
+      <div className="mt-0.5 select-none text-center text-[10px] text-slate-500 dark:text-slate-400 max-md:hidden">{label}</div>
     </div>
   );
 }
 
 function SmallStack({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col justify-start gap-0.5 py-0.5">{children}</div>;
+  return <div className="flex flex-col justify-start gap-0.5 py-0.5 max-md:flex-row max-md:py-0">{children}</div>;
 }
 
 export function Ribbon() {
@@ -106,15 +108,28 @@ export function Ribbon() {
   const tab = useUiStore((s) => s.ribbonTab);
   const setTab = useUiStore((s) => s.setRibbonTab);
   const fileName = useWorkbookStore((s) => s.fileName);
+  const tabsRef = useRef<HTMLElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+
+  // keep the active tab visible in the (horizontally scrollable) tab strip and show the new tab's first buttons
+  useEffect(() => {
+    const nav = tabsRef.current;
+    const el = nav?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (nav && el && nav.scrollWidth > nav.clientWidth) {
+      const left = el.offsetLeft - nav.offsetLeft;
+      if (left < nav.scrollLeft || left + el.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollTo({ left: Math.max(0, left - 24), behavior: "smooth" });
+    }
+    toolbarRef.current?.scrollTo({ left: 0 });
+  }, [tab]);
 
   return (
     <header className="shrink-0 select-none">
-      <div className="flex h-8 items-end bg-[#1f3864] pl-2 text-white dark:bg-slate-950">
-        <div className="mr-3 flex items-center gap-1.5 self-center text-sm font-semibold tracking-tight">
+      <div className="flex h-8 items-end bg-[#1f3864] pl-2 text-white dark:bg-slate-950 max-md:h-10 max-md:pt-[env(safe-area-inset-top)] max-md:box-content max-md:pl-[max(0.5rem,env(safe-area-inset-left))]">
+        <div className="mr-3 flex shrink-0 items-center gap-1.5 self-center text-sm font-semibold tracking-tight max-md:mr-1.5">
           <img src="./icon.svg" alt="" className="h-5 w-5" />
-          OpenRiskSim
+          <span className="max-[399px]:sr-only">OpenRiskSim</span>
         </div>
-        <nav className="flex gap-0.5" role="tablist" aria-label={t("ribbon.tabs")}>
+        <nav ref={tabsRef} className="no-scrollbar flex min-w-0 snap-x gap-0.5 overflow-x-auto max-md:h-full max-md:items-end max-md:pr-2" role="tablist" aria-label={t("ribbon.tabs")}>
           {TABS.map((id) => (
             <button
               key={id}
@@ -122,7 +137,7 @@ export function Ribbon() {
               aria-selected={tab === id}
               onClick={() => setTab(id)}
               className={clsx(
-                "rounded-t px-3 py-1 text-[12.5px]",
+                "shrink-0 snap-start whitespace-nowrap rounded-t px-3 py-1 text-[12.5px] max-md:px-2.5 max-md:py-2 max-md:text-[13px]",
                 tab === id ? "bg-slate-50 font-semibold text-[#1f3864] dark:bg-slate-900 dark:text-blue-200" : "text-blue-50 hover:bg-white/15",
               )}
             >
@@ -130,11 +145,16 @@ export function Ribbon() {
             </button>
           ))}
         </nav>
-        <div className="ml-auto mr-3 self-center truncate text-xs text-blue-100/80" title={fileName}>
+        <div className="ml-auto mr-3 min-w-0 self-center truncate pl-2 text-xs text-blue-100/80 max-lg:hidden" title={fileName}>
           {fileName}
         </div>
       </div>
-      <div className="flex h-[94px] items-stretch overflow-x-auto border-b border-slate-300 bg-slate-50 py-1 dark:border-slate-700 dark:bg-slate-900" role="toolbar" aria-label={t(`ribbon.${tab}`)}>
+      <div
+        ref={toolbarRef}
+        className="flex h-[94px] items-stretch overflow-x-auto border-b border-slate-300 bg-slate-50 py-1 dark:border-slate-700 dark:bg-slate-900 no-scrollbar-mobile max-md:h-14 max-md:snap-x max-md:py-0.5 max-md:pl-[env(safe-area-inset-left)]"
+        role="toolbar"
+        aria-label={t(`ribbon.${tab}`)}
+      >
         {tab === "file" && <FileTab />}
         {tab === "simulation" && <SimulationTab />}
         {(tab === "analysis" || tab === "forecast" || tab === "optimization" || tab === "finance") && <ToolsTab tab={tab} />}

@@ -4,6 +4,7 @@ import { useWorkbookStore } from "../store/workbook";
 import { useUiStore } from "../store/ui";
 import { commitEdit, rawCellContent, useEditStore } from "./editState";
 import { parseRangeBounds, splitSheetRef } from "../lib/a1";
+import { isCoarsePointer } from "../lib/responsive";
 
 /** Name box + fx input (Excel-like). */
 export function FormulaBar() {
@@ -23,7 +24,11 @@ export function FormulaBar() {
 
   useEffect(() => setNameText(null), [selection.range, sheet]);
 
-  const focusGrid = () => (document.querySelector("[data-grid-focus]") as HTMLElement | null)?.focus({ preventScroll: true });
+  const focusGrid = () => {
+    // touch devices: just drop the focus (focusing the hidden textarea would keep the on-screen keyboard up)
+    if (isCoarsePointer()) (document.activeElement as HTMLElement | null)?.blur();
+    else (document.querySelector("[data-grid-focus]") as HTMLElement | null)?.focus({ preventScroll: true });
+  };
 
   const goName = () => {
     const txt = (nameText ?? "").trim();
@@ -39,10 +44,10 @@ export function FormulaBar() {
   };
 
   return (
-    <div className="flex h-8 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900">
+    <div className="flex h-8 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900 max-md:h-11 max-md:gap-1.5 max-md:px-1.5">
       <input
         aria-label={t("grid.nameBox")}
-        className="h-6 w-28 rounded border border-slate-300 bg-white px-1.5 text-[12px] tabular-nums text-slate-800 focus:border-blue-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        className="h-6 w-28 rounded border max-md:h-8 max-md:w-16 max-md:px-1 max-md:text-center border-slate-300 bg-white px-1.5 text-[12px] tabular-nums text-slate-800 focus:border-blue-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         value={nameText ?? selection.range}
         onChange={(e) => setNameText(e.target.value)}
         onFocus={(e) => e.target.select()}
@@ -57,11 +62,11 @@ export function FormulaBar() {
         }}
         onBlur={() => setNameText(null)}
       />
-      <span className="select-none font-serif text-sm italic text-slate-500">fx</span>
+      <span className="select-none font-serif text-sm italic text-slate-500 max-md:text-xs">fx</span>
       <input
         data-formula-input
         aria-label={t("grid.formulaBar")}
-        className="h-6 flex-1 rounded border border-slate-300 bg-white px-2 font-mono text-[12px] text-slate-900 focus:border-blue-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        className="h-6 min-w-0 flex-1 rounded border max-md:h-8 border-slate-300 bg-white px-2 font-mono text-[12px] text-slate-900 focus:border-blue-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         value={shown}
         disabled={!engine}
         onFocus={() => {

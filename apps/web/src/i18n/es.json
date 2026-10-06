@@ -328,7 +328,18 @@
     "footer": "Generado con OpenRiskSim (software libre, GPL-3.0). Los resultados de una simulación Monte Carlo son estimaciones y dependen de los supuestos del modelo."
   },
   "welcome": {
-    "text": "Bienvenido a OpenRiskSim: abra su libro .xlsx (o arrástrelo aquí), o empiece con un ejemplo de evaluación de proyectos."
+    "text": "Bienvenido a OpenRiskSim: abra su libro .xlsx (o arrástrelo aquí), o empiece con un ejemplo de evaluación de proyectos.",
+    "short": "Abra su libro .xlsx o empiece con un ejemplo de evaluación de proyectos."
+  },
+  "mobile": {
+    "nav": "Navegación principal",
+    "sheet": "Hoja",
+    "model": "Modelo",
+    "run": "Ejecutar",
+    "stop": "Detener",
+    "results": "Resultados",
+    "define": "Definir",
+    "definitions": "{{n}} definiciones en el modelo"
   },
   "help": {
     "title": "Ayuda",

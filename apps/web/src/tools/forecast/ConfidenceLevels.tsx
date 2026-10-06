@@ -61,7 +61,7 @@ export function ConfidenceLevels({
   };
 
   const customOnes = value.filter((v) => !LEVEL_PRESETS.some((p) => same(p, v)));
-  const chip = "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums transition-colors";
+  const chip = "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium tabular-nums transition-colors max-md:min-h-9 max-md:px-3 max-md:text-[13px]";
   const on = "border-blue-700 bg-blue-700 text-white hover:bg-blue-800";
   const off = "border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700";
 
@@ -96,7 +96,7 @@ export function ConfidenceLevels({
       <div className="flex items-center gap-1.5">
         <input
           inputMode="decimal"
-          className="w-24 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-right text-xs tabular-nums text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+          className="w-24 rounded-md border border-slate-300 bg-white px-2 py-0.5 max-md:py-1.5 text-right text-xs tabular-nums text-slate-900 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
           placeholder={locale === "es" ? "97,5" : "97.5"}
           aria-label={t("levels.custom")}
           value={custom}

@@ -17,6 +17,10 @@ body,
   margin: 0;
   overflow: hidden;
 }
+/* dynamic viewport height: excludes the mobile browser toolbars */
+#root {
+  height: 100dvh;
+}
 
 body {
   background: #f8fafc;
@@ -37,6 +41,78 @@ body.ors-picking .ors-modal {
 }
 .dark * {
   scrollbar-color: #475569 transparent;
+}
+
+/* Horizontally scrollable strips (ribbon, tabs) without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+@media (max-width: 767px) {
+  .no-scrollbar-mobile {
+    scrollbar-width: none;
+  }
+  .no-scrollbar-mobile::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Phones/touch tablets: form controls at 16px so iOS Safari does not auto-zoom on focus.
+   Unlayered on purpose — it overrides the (layered) text-size utilities of every dialog/tool. */
+@media (max-width: 767px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+:root {
+  --bottom-nav-h: 0px;
+}
+@media (max-width: 767px) {
+  :root {
+    --bottom-nav-h: calc(60px + env(safe-area-inset-bottom));
+  }
+}
+
+@keyframes ors-slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes ors-slide-in-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.ors-slide-left {
+  animation: ors-slide-in-left 180ms ease-out;
+}
+.ors-slide-up {
+  animation: ors-slide-in-up 180ms ease-out;
+}
+@media (max-width: 767px) {
+  .ors-modal-full {
+    animation: ors-slide-in-up 180ms ease-out;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ors-modal-full,
+  .ors-slide-left,
+  .ors-slide-up {
+    animation: none;
+  }
 }
 
 @media print {

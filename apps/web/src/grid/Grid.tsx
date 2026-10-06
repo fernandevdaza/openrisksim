@@ -10,6 +10,7 @@ import { describeSpec } from "../lib/modelText";
 import { readableOnTheme } from "../lib/color";
 import { commitEdit, normaliseFormula, rawCellContent, useEditStore } from "./editState";
 import { CellContextMenu } from "./ContextMenu";
+import { isCoarsePointer, touchedRecently } from "../lib/responsive";
 import type { AssumptionDef, DecisionVariableDef, ForecastDef } from "@openrisksim/core";
 
 export const ROW_H = 22;
@@ -66,6 +67,7 @@ export function Grid() {
   const dark = useUiStore((s) => s.theme) === "dark";
   const jumpRequest = useUiStore((s) => s.jumpRequest);
   const editing = useEditStore((s) => s.editing);
+  const picking = useUiStore((s) => s.rangePick !== null);
 
   const meta = useMemo(() => workbook?.sheets.find((s) => s.name === sheet), [workbook, sheet]);
   const [extra, setExtra] = useState({ rows: 0, cols: 0 });
@@ -89,7 +91,10 @@ export function Grid() {
   const bodyRef = useRef<HTMLDivElement>(null);
   /** Hidden textarea that owns keyboard focus: receives keydown, IME/dead-key text input and clipboard events. */
   const keyRef = useRef<HTMLTextAreaElement>(null);
-  const focusGrid = () => keyRef.current?.focus({ preventScroll: true });
+  // On touch devices the hidden textarea only gets focus to start an edit (otherwise the on-screen keyboard would pop up on every tap).
+  const focusGrid = () => {
+    if (!isCoarsePointer()) keyRef.current?.focus({ preventScroll: true });
+  };
   const rootRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
   const [view, setView] = useState({ w: 800, h: 500 });
@@ -483,6 +488,8 @@ export function Grid() {
 
   const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("[data-cell-editor]")) return;
+    // compatibility mouse events after a tap: the touch handlers below already did the work
+    if (touchedRecently()) return;
     const el = bodyRef.current!;
     // ignore clicks on scrollbars
     const rect = el.getBoundingClientRect();
@@ -520,12 +527,83 @@ export function Grid() {
 
   const onDoubleClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("[data-cell-editor]")) return;
+    if (touchedRecently()) return;
     startEdit(null, "edit");
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (touchedRecently()) return; // touch: our own long-press opens the menu
     setMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  // ---- touch ----------------------------------------------------------------------------------
+  // Native (momentum) scrolling stays on; a tap selects, a tap on the selected cell edits,
+  // a long-press (≈500 ms, ≤10 px of movement) opens the cell menu. While picking a range for a
+  // dialog, dragging selects instead of scrolling.
+  const touch = useRef<{ x: number; y: number; moved: boolean; long: boolean; range: boolean; timer: ReturnType<typeof setTimeout> | null } | null>(null);
+  useEffect(() => () => {
+    if (touch.current?.timer) clearTimeout(touch.current.timer);
+  }, []);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "touch" || !e.isPrimary) return;
+    if ((e.target as HTMLElement).closest("[data-cell-editor]")) return;
+    if (touch.current?.timer) clearTimeout(touch.current.timer);
+    const x = e.clientX;
+    const y = e.clientY;
+    const st = { x, y, moved: false, long: false, range: picking, timer: null as ReturnType<typeof setTimeout> | null };
+    touch.current = st;
+    if (picking) {
+      const pos = cellFromEvent(x, y);
+      select(pos, pos);
+      return;
+    }
+    st.timer = setTimeout(() => {
+      st.timer = null;
+      if (touch.current !== st || st.moved) return;
+      st.long = true;
+      if (useEditStore.getState().editing) commitEdit();
+      const pos = cellFromEvent(x, y);
+      if (!inBounds(selBounds, pos.row, pos.col)) select(pos, pos);
+      navigator.vibrate?.(10);
+      setMenu({ x, y });
+    }, 500);
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const st = touch.current;
+    if (!st || e.pointerType !== "touch") return;
+    if (st.range) {
+      const p = cellFromEvent(e.clientX, e.clientY);
+      if (p.row !== focusRef.current.row || p.col !== focusRef.current.col) select(anchorRef.current, p);
+      return;
+    }
+    if (!st.moved && Math.hypot(e.clientX - st.x, e.clientY - st.y) > 10) {
+      st.moved = true;
+      if (st.timer) clearTimeout(st.timer);
+      st.timer = null;
+    }
+  };
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const st = touch.current;
+    if (!st || e.pointerType !== "touch") return;
+    touch.current = null;
+    if (st.timer) clearTimeout(st.timer);
+    if (st.range || st.moved || st.long) return;
+    const pos = cellFromEvent(e.clientX, e.clientY);
+    const editingNow = useEditStore.getState().editing;
+    if (editingNow) commitEdit();
+    const single = selBounds.r0 === selBounds.r1 && selBounds.c0 === selBounds.c1;
+    const same = single && cursorPos.row === pos.row && cursorPos.col === pos.col && sheet === useWorkbookStore.getState().selection.sheet;
+    if (same && !editingNow) {
+      // focus synchronously inside the gesture so iOS shows the keyboard; the cell editor takes it over
+      keyRef.current?.focus({ preventScroll: true });
+      startEdit(null, "edit");
+    } else select(pos, pos);
+  };
+  const onPointerCancel = () => {
+    if (touch.current?.timer) clearTimeout(touch.current.timer);
+    touch.current = null;
   };
 
   // ---- header interactions ----------------------------------------------------------------------
@@ -544,6 +622,7 @@ export function Grid() {
     else select({ row, col: 0 }, { row, col: last });
   };
   const onResizeStart = (e: React.MouseEvent, col: number) => {
+    if (touchedRecently()) return;
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
@@ -653,8 +732,12 @@ export function Grid() {
         aria-label={t("grid.ariaLabel", { sheet })}
         aria-rowcount={dims.rows}
         aria-colcount={dims.cols}
-        className="relative overflow-auto outline-none"
+        className={clsx("relative select-none overflow-auto overscroll-contain outline-none [-webkit-touch-callout:none]", picking ? "touch-none" : "touch-manipulation")}
         onScroll={onScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
         onMouseDown={onMouseDown}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}

@@ -250,7 +250,7 @@ export function AssumptionDialog({ cell, id, onClose }: { cell: CellRef; id?: st
                 key={f}
                 role="radio"
                 aria-checked={filter === f}
-                className={clsx("rounded-full border px-2 py-0.5", filter === f ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800")}
+                className={clsx("rounded-full border px-2 py-0.5 max-md:min-h-9 max-md:px-3.5 max-md:text-[13px]", filter === f ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800")}
                 onClick={() => setFilter(f)}
               >
                 {t(`assumption.filter_${f}`)}

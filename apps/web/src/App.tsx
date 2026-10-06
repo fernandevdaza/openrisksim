@@ -8,6 +8,8 @@ import { SheetTabs } from "./grid/SheetTabs";
 import { ModelExplorer } from "./results/ModelExplorer";
 import { ResultsDock } from "./results/ResultsDock";
 import { StatusBar } from "./results/StatusBar";
+import { BottomNav } from "./results/BottomNav";
+import { COMPACT_QUERY, MOBILE_QUERY, matches, useIsCompact, useIsMobile } from "./lib/responsive";
 import { DialogHost, ToolHost } from "./dialogs/DialogHost";
 import { useWorkbookStore, blankWorkbook } from "./store/workbook";
 import { useModelStore } from "./store/model";
@@ -21,18 +23,21 @@ import { formatRangeRef } from "./components/ui/RangeInput";
 function Toasts() {
   const toasts = useUiStore((s) => s.toasts);
   return (
-    <div className="pointer-events-none fixed bottom-10 left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2" aria-live="polite">
+    <div
+      className="pointer-events-none fixed bottom-10 left-1/2 z-[70] flex -translate-x-1/2 flex-col items-center gap-2 max-md:bottom-[calc(var(--bottom-nav-h)+2rem)] max-md:w-[calc(100%-1.5rem)]"
+      aria-live="polite"
+    >
       {toasts.map((tt) => (
         <div
           key={tt.id}
           className={clsx(
-            "pointer-events-auto flex max-w-xl items-center gap-2 rounded-md px-3 py-2 text-sm shadow-lg",
+            "pointer-events-auto flex max-w-xl items-center gap-2 rounded-md px-3 py-2 text-sm shadow-lg max-md:max-w-full",
             tt.kind === "error" ? "bg-red-700 text-white" : tt.kind === "success" ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : "bg-slate-800 text-white",
           )}
           role={tt.kind === "error" ? "alert" : "status"}
         >
           {tt.kind === "error" ? <CircleAlert size={15} /> : tt.kind === "success" ? <CircleCheck size={15} className="text-green-400 dark:text-green-600" /> : <Info size={15} />}
-          <span>{tt.message}</span>
+          <span className="min-w-0 break-words">{tt.message}</span>
           <button className="ml-1 opacity-70 hover:opacity-100" onClick={() => useUiStore.getState().dismissToast(tt.id)} aria-label="✕">
             <X size={13} />
           </button>
@@ -49,13 +54,13 @@ function RangePickBar() {
   if (!picking) return null;
   const ref = formatRangeRef(selection.sheet, selection.range);
   return (
-    <div className="fixed left-1/2 top-2 z-[80] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm shadow-2xl dark:border-blue-700 dark:bg-slate-800">
-      <span className="text-slate-700 dark:text-slate-200">{t("range.pickPrompt")}</span>
+    <div className="fixed left-1/2 top-2 z-[80] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm shadow-2xl dark:border-blue-700 dark:bg-slate-800 max-md:left-2 max-md:right-2 max-md:top-[max(0.5rem,env(safe-area-inset-top))] max-md:translate-x-0 max-md:flex-wrap max-md:gap-2 max-md:px-3">
+      <span className="text-slate-700 dark:text-slate-200 max-md:w-full">{t("range.pickPrompt")}</span>
       <code className="rounded bg-blue-50 px-2 py-0.5 font-mono text-blue-900 dark:bg-slate-900 dark:text-blue-200">{ref}</code>
-      <button className="rounded-md bg-blue-700 px-3 py-1 text-white hover:bg-blue-800" onClick={() => useUiStore.getState().finishRangePick(ref)}>
+      <button className="rounded-md bg-blue-700 px-3 py-1 text-white hover:bg-blue-800 max-md:ml-auto max-md:min-h-10 max-md:px-4" onClick={() => useUiStore.getState().finishRangePick(ref)}>
         {t("common.ok")}
       </button>
-      <button className="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700" onClick={() => useUiStore.getState().finishRangePick(null)}>
+      <button className="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700 max-md:min-h-10 max-md:px-4" onClick={() => useUiStore.getState().finishRangePick(null)}>
         {t("common.cancel")}
       </button>
     </div>
@@ -71,22 +76,51 @@ function Welcome() {
   const blank = !!workbook && workbook.sheets.every((sh) => Object.keys(sh.cells).length === 0) && editVersion <= 1;
   if (dismissed || !empty || !blank) return null;
   return (
-    <div className="flex items-center gap-3 border-b border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100">
+    <div className="flex items-center gap-3 border-b border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-100 max-md:flex-wrap max-md:gap-x-2 max-md:gap-y-1.5 max-md:py-2">
       <Rocket size={18} className="shrink-0 text-blue-700 dark:text-blue-300" />
-      <span className="flex-1">{t("welcome.text")}</span>
-      <button className="inline-flex items-center gap-1 rounded-md bg-blue-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-800" onClick={actions.openExamples}>
-        <BookOpen size={13} /> {t("file.examples")}
-      </button>
-      <button className="inline-flex items-center gap-1 rounded-md border border-blue-300 px-2.5 py-1 text-xs font-medium hover:bg-blue-100 dark:border-blue-700 dark:hover:bg-blue-900" onClick={() => void actions.openFile()}>
-        <FolderOpen size={13} /> {t("file.open")}
-      </button>
-      <button className="text-xs underline" onClick={() => actions.help("quickstart")}>
-        {t("help.quickstart")}
-      </button>
-      <button className="rounded p-1 hover:bg-blue-100 dark:hover:bg-blue-900" onClick={() => setDismissed(true)} aria-label={t("common.close")}>
+      <span className="flex-1 max-md:hidden">{t("welcome.text")}</span>
+      <span className="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug md:hidden">{t("welcome.short")}</span>
+      <button className="rounded p-1 hover:bg-blue-100 dark:hover:bg-blue-900 order-last max-md:hidden" onClick={() => setDismissed(true)} aria-label={t("common.close")}>
         <X size={14} />
       </button>
+      <button className="-mr-1 shrink-0 rounded p-2 hover:bg-blue-100 dark:hover:bg-blue-900 md:hidden" onClick={() => setDismissed(true)} aria-label={t("common.close")}>
+        <X size={16} />
+      </button>
+      <div className="flex items-center gap-3 max-md:w-full max-md:gap-2 max-md:pl-[26px] md:contents">
+        <button className="inline-flex items-center gap-1 rounded-md bg-blue-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-800 max-md:min-h-9 max-md:px-3 max-md:text-[13px]" onClick={actions.openExamples}>
+          <BookOpen size={13} /> {t("file.examples")}
+        </button>
+        <button className="inline-flex items-center gap-1 rounded-md border border-blue-300 px-2.5 py-1 text-xs font-medium hover:bg-blue-100 dark:border-blue-700 dark:hover:bg-blue-900 max-md:min-h-9 max-md:px-3 max-md:text-[13px]" onClick={() => void actions.openFile()}>
+          <FolderOpen size={13} /> {t("file.open")}
+        </button>
+        <button className="text-xs underline max-md:ml-auto max-md:min-h-9 max-md:text-[13px]" onClick={() => actions.help("quickstart")}>
+          {t("help.quickstart")}
+        </button>
+      </div>
     </div>
+  );
+}
+
+/** Phone/tablet shell behaviour: explorer drawer and results sheet get out of the way when navigating. */
+function useResponsiveShell() {
+  const compact = useIsCompact();
+  useEffect(() => {
+    // entering a compact width with the explorer docked → turn it into a (closed) drawer
+    if (compact) useUiStore.getState().setExplorerOpen(false);
+  }, [compact]);
+  useEffect(
+    () =>
+      useUiStore.subscribe((s, p) => {
+        const ui = useUiStore.getState();
+        // jumping to a cell (explorer item, "go to cell" link) → show the sheet
+        if (s.jumpRequest !== p.jumpRequest && s.jumpRequest) {
+          if (matches(COMPACT_QUERY) && s.explorerOpen) ui.setExplorerOpen(false);
+          if (matches(MOBILE_QUERY) && s.resultsOpen) ui.setResultsOpen(false);
+        }
+        // opening the results sheet from the drawer closes the drawer
+        if (s.resultsOpen && !p.resultsOpen && s.explorerOpen && matches(MOBILE_QUERY)) ui.setExplorerOpen(false);
+      }),
+    [],
   );
 }
 
@@ -94,6 +128,8 @@ export function App() {
   const { t } = useTranslation();
   const [ready, setReady] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const mobile = useIsMobile();
+  useResponsiveShell();
 
   useEffect(() => {
     let stopAutosave: (() => void) | null = null;
@@ -150,7 +186,7 @@ export function App() {
       <Ribbon />
       <Welcome />
       <FormulaBar />
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
         <ModelExplorer />
         <main className="flex min-w-0 flex-1 flex-col" aria-label={t("grid.region")}>
           {ready ? <Grid /> : <div className="flex flex-1 items-center justify-center text-sm text-slate-500">{t("common.loading")}</div>}
@@ -159,6 +195,7 @@ export function App() {
         <ResultsDock />
       </div>
       <StatusBar />
+      {mobile && <BottomNav />}
       <DialogHost />
       <ToolHost />
       <RangePickBar />

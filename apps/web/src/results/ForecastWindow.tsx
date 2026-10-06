@@ -206,7 +206,7 @@ function ForecastView({ fr, def }: { fr: ForecastResult; def: ForecastDef }) {
           { id: "pct", label: t("results.percentiles") },
         ]}
       />
-      <div className="min-h-0 flex-1 overflow-auto p-2">
+      <div className="min-h-0 flex-1 overflow-auto p-2 max-md:px-3 max-md:pb-6">
         {tab === "hist" && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2 text-xs">
@@ -216,7 +216,7 @@ function ForecastView({ fr, def }: { fr: ForecastResult; def: ForecastDef }) {
                     key={v}
                     role="radio"
                     aria-checked={view === v}
-                    className={clsx("px-2 py-0.5", view === v ? "bg-blue-700 text-white" : "bg-white text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200")}
+                    className={clsx("px-2 py-0.5 max-md:px-3 max-md:py-1.5", view === v ? "bg-blue-700 text-white" : "bg-white text-slate-700 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200")}
                     onClick={() => setView(v)}
                   >
                     {t(`results.view_${v}`)}
@@ -225,7 +225,7 @@ function ForecastView({ fr, def }: { fr: ForecastResult; def: ForecastDef }) {
               </div>
               <span ref={liveRef} className="font-mono text-[11px] text-red-700 dark:text-red-300" aria-live="polite" />
               <button
-                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 max-md:px-2.5 max-md:py-1.5"
                 onClick={() => {
                   const url = chartRef.current?.getDataURL({ type: "png", pixelRatio: 2, backgroundColor: theme === "dark" ? "#0f172a" : "#ffffff" });
                   if (url) downloadDataUrl(url, `${def.name || "forecast"}.png`);
@@ -267,11 +267,11 @@ function CertaintyControls({ state, sorted, onChange }: { state: CertaintyState;
   const { t } = useTranslation();
   const locale = useUiStore((s) => s.locale);
   return (
-    <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-end gap-2 text-xs">
+    <div className="grid grid-cols-[auto_1fr_1fr_1fr] items-end gap-2 text-xs max-md:grid-cols-2 max-md:items-start max-md:gap-x-3 max-md:text-[13px]">
       <label className="flex flex-col gap-0.5">
         <span className="text-slate-600 dark:text-slate-400">{t("results.tail")}</span>
         <Select<TailMode>
-          className="!py-0.5 !text-xs"
+          className="!py-0.5 !text-xs max-md:!py-1.5 max-md:!text-base"
           value={state.mode}
           onChange={(m) => onChange(switchMode(sorted, state, m))}
           options={[
@@ -284,7 +284,7 @@ function CertaintyControls({ state, sorted, onChange }: { state: CertaintyState;
       <label className="flex flex-col gap-0.5">
         <span className="text-slate-600 dark:text-slate-400">{t("results.lower")}</span>
         <NumberInput
-          className="!py-0.5 !text-xs"
+          className="!py-0.5 !text-xs max-md:!py-1.5 max-md:!text-base"
           disabled={state.mode === "left"}
           value={Number.isFinite(state.lower) ? round6(state.lower) : null}
           onChange={(v) => onChange(withBound(sorted, state, "lower", v))}
@@ -293,7 +293,7 @@ function CertaintyControls({ state, sorted, onChange }: { state: CertaintyState;
       <label className="flex flex-col gap-0.5">
         <span className="text-slate-600 dark:text-slate-400">{t("results.upper")}</span>
         <NumberInput
-          className="!py-0.5 !text-xs"
+          className="!py-0.5 !text-xs max-md:!py-1.5 max-md:!text-base"
           disabled={state.mode === "right"}
           value={Number.isFinite(state.upper) ? round6(state.upper) : null}
           onChange={(v) => onChange(withBound(sorted, state, "upper", v))}
@@ -303,7 +303,7 @@ function CertaintyControls({ state, sorted, onChange }: { state: CertaintyState;
         <label className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-slate-600 dark:text-slate-400">{t("results.certaintyPct")}</span>
           <NumberInput
-            className="!py-0.5 !text-xs font-semibold"
+            className="!py-0.5 !text-xs font-semibold max-md:!py-1.5 max-md:!text-base"
             min={0}
             max={100}
             value={Math.round(state.certainty * 1e4) / 100}
@@ -313,7 +313,7 @@ function CertaintyControls({ state, sorted, onChange }: { state: CertaintyState;
           />
         </label>
         <select
-          className="h-[26px] w-7 shrink-0 cursor-pointer appearance-none rounded border border-slate-300 bg-white bg-[length:10px] bg-center bg-no-repeat text-center text-[11px] text-transparent dark:border-slate-600 dark:bg-slate-800"
+          className="h-[26px] w-7 shrink-0 cursor-pointer appearance-none max-md:h-[38px] max-md:w-9 rounded border border-slate-300 bg-white bg-[length:10px] bg-center bg-no-repeat text-center text-[11px] text-transparent dark:border-slate-600 dark:bg-slate-800"
           style={{ backgroundImage: CHEVRON }}
           aria-label={t("results.certaintyPresets")}
           title={t("results.certaintyPresets")}
@@ -364,7 +364,7 @@ function QuickStats({ fr, kind, sorted }: { fr: ForecastResult; kind: ForecastDe
     [t("stats.probPositive"), pct2(pPos, locale)],
   ];
   return (
-    <div className="grid grid-cols-3 gap-1.5">
+    <div className="grid grid-cols-3 gap-1.5 max-[399px]:grid-cols-2">
       {items.map(([k, v]) => (
         <div key={k} className="rounded border border-slate-200 px-2 py-1 dark:border-slate-700">
           <div className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{k}</div>

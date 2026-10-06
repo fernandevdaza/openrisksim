@@ -8,6 +8,8 @@ import { parseRangeBounds } from "../lib/a1";
 import { formatStat } from "../lib/numberFormat";
 import { actions } from "../actions";
 import { BackendBadge } from "./BackendBadge";
+import { useIsMobile } from "../lib/responsive";
+import { clsx } from "../components/ui";
 
 function SelectionSummary() {
   const { t } = useTranslation();
@@ -66,19 +68,30 @@ export function StatusBar() {
   const stepping = useWorkbookStore((s) => !!s.stepEvaluator);
   const resultModel = useSimulationStore((s) => s.resultModel);
 
+  const mobile = useIsMobile();
+
   const errors = result ? Object.values(result.forecasts).reduce((a, f) => a + f.errors, 0) : 0;
   const errorText = error ? (error.startsWith("sim.") ? t(error) : error) : null;
+  // phones: a single short line above the bottom navigation, and only when there is something to say
+  if (mobile && status !== "running" && !stepping && !result && !errorText) return null;
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-slate-300 bg-slate-100 px-3 text-[11.5px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" role="status" aria-live="polite">
+    <footer
+      className={clsx(
+        "flex h-7 shrink-0 items-center gap-3 border-t border-slate-300 bg-slate-100 px-3 text-[11.5px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+        "no-scrollbar-mobile max-md:gap-2 max-md:overflow-x-auto max-md:whitespace-nowrap max-md:px-2",
+      )}
+      role="status"
+      aria-live="polite"
+    >
       {status === "running" ? (
         <div className="flex items-center gap-2">
           <LoaderCircle size={13} className="animate-spin text-blue-700" />
           <span>{t("status.running", { pct: Math.round(progress * 100) })}</span>
-          <div className="h-2 w-48 overflow-hidden rounded-full bg-slate-300 dark:bg-slate-600" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
+          <div className="h-2 w-48 overflow-hidden rounded-full bg-slate-300 dark:bg-slate-600 max-md:w-24" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
             <div className="h-full bg-blue-700 transition-[width] duration-150" style={{ width: `${progress * 100}%` }} />
           </div>
-          <button className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-red-700 hover:bg-red-100 dark:text-red-300 dark:hover:bg-red-900/30" onClick={() => useSimulationStore.getState().abort()}>
+          <button className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-red-700 hover:bg-red-100 dark:text-red-300 dark:hover:bg-red-900/30 max-md:hidden" onClick={() => useSimulationStore.getState().abort()}>
             <Square size={11} /> {t("sim.abort")}
           </button>
         </div>
@@ -95,18 +108,30 @@ export function StatusBar() {
         </div>
       ) : result ? (
         <div className="flex items-center gap-3">
-          <span>
-            {t("status.trials")}: <b>{result.trials.toLocaleString(locale)}</b>
-            {result.stoppedEarly && <span className="ml-1 text-blue-700 dark:text-blue-300">({t("status.precisionReached")})</span>}
-          </span>
-          <span>
-            {t("status.time")}: <b>{(result.elapsedMs / 1000).toFixed(2)} s</b>
-          </span>
-          <span>
-            {t("settings.seed")}: <b>{result.seed ?? "—"}</b>
-          </span>
-          <span>{resultModel?.settings.sampling === "latinHypercube" ? "LHS" : "Monte Carlo"}</span>
-          {result.backend && <BackendBadge backend={result.backend} />}
+          {mobile ? (
+            <span className="tabular-nums">
+              {t("results.trialsN", { n: result.trials.toLocaleString(locale) })} · {(result.elapsedMs / 1000).toFixed(2)} s
+            </span>
+          ) : (
+            <>
+              <span>
+                {t("status.trials")}: <b>{result.trials.toLocaleString(locale)}</b>
+                {result.stoppedEarly && <span className="ml-1 text-blue-700 dark:text-blue-300">({t("status.precisionReached")})</span>}
+              </span>
+              <span>
+                {t("status.time")}: <b>{(result.elapsedMs / 1000).toFixed(2)} s</b>
+              </span>
+            </>
+          )}
+          {!mobile && (
+            <>
+              <span>
+                {t("settings.seed")}: <b>{result.seed ?? "—"}</b>
+              </span>
+              <span>{resultModel?.settings.sampling === "latinHypercube" ? "LHS" : "Monte Carlo"}</span>
+              {result.backend && <BackendBadge backend={result.backend} />}
+            </>
+          )}
           {errors > 0 && (
             <span className="flex items-center gap-1 text-red-700 dark:text-red-400">
               <CircleAlert size={12} /> {t("status.errors", { n: errors })}
@@ -130,9 +155,11 @@ export function StatusBar() {
           </button>
         </span>
       )}
-      <div className="ml-auto">
-        <SelectionSummary />
-      </div>
+      {!mobile && (
+        <div className="ml-auto">
+          <SelectionSummary />
+        </div>
+      )}
     </footer>
   );
 }

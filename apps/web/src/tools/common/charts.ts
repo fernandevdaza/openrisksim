@@ -53,8 +53,9 @@ export function heatColor(v: number, min: number, max: number): { bg: string; fg
   return { bg, fg: level > 0.55 ? "#ffffff" : "#0b0b0b" };
 }
 
-const valueAxisLabel = (locale: Locale) => ({ formatter: (v: number) => fmtCompact(v, locale), color: ink() });
-const pctAxisLabel = (locale: Locale) => ({ formatter: (v: number) => fmtPct(v, 0, locale), color: ink() });
+// hideOverlap: on narrow (phone) charts drop colliding tick labels instead of overprinting them
+const valueAxisLabel = (locale: Locale) => ({ formatter: (v: number) => fmtCompact(v, locale), color: ink(), hideOverlap: true });
+const pctAxisLabel = (locale: Locale) => ({ formatter: (v: number) => fmtPct(v, 0, locale), color: ink(), hideOverlap: true });
 
 function baseOption(title?: string): EChartsOption {
   return {
@@ -151,7 +152,7 @@ export function histogramOption(h: HistogramInput): EChartsOption {
         return `${(p as { seriesName: string }).seriesName}<br/>${fmt(v[0], 3, h.locale)} → ${fmt(v[1], 4, h.locale)}`;
       },
     },
-    legend: (h.overlays?.length ?? 0) > 0 ? { bottom: 0 } : undefined,
+    legend: (h.overlays?.length ?? 0) > 0 ? { bottom: 0, type: "scroll" } : undefined,
     grid: { left: 64, right: 24, top: h.title ? 40 : 20, bottom: (h.overlays?.length ?? 0) > 0 ? 64 : 44 },
     xAxis: { ...valueAxis(h.xName, h.locale), min: minX, max: maxX, nameGap: 28, splitLine: { show: false } },
     yAxis: { ...valueAxis(h.yName, h.locale, h.yPercent, { scale: false }), nameGap: 50 },
@@ -318,9 +319,9 @@ export function tornadoOption(p: {
         return `${names[value[0]]}<br/>${seriesName}: ${fmt(value[1], 2, p.locale)}<br/>${p.baseLabel}: ${fmt(p.base, 2, p.locale)}`;
       },
     },
-    legend: { bottom: 0, data: [p.lowLabel, p.highLabel] },
+    legend: { bottom: 0, type: "scroll", data: [p.lowLabel, p.highLabel] },
     grid: { left: 8, right: 32, top: 28, bottom: 52, containLabel: true },
-    xAxis: { type: "value", scale: true, axisLabel: { formatter: (v: number) => fmtCompact(v, p.locale), color: ink() }, splitLine: { lineStyle: { color: gridLine() } } },
+    xAxis: { type: "value", scale: true, axisLabel: { formatter: (v: number) => fmtCompact(v, p.locale), color: ink(), hideOverlap: true }, splitLine: { lineStyle: { color: gridLine() } } },
     yAxis: { type: "category", data: names, axisTick: { show: false }, axisLabel: { color: ink(), width: 160, overflow: "truncate" } },
     series: [
       barSeries(p.lowLabel, lo, col[1]),
@@ -404,6 +405,8 @@ export function forecastBandOption(p: {
     tooltip: { trigger: "axis", valueFormatter: (v: unknown) => (typeof v === "number" ? fmt(v, 3, p.locale) : "—") },
     legend: {
       bottom: 0,
+      // one scrollable row: on narrow (phone) charts a wrapped legend would overlap the x axis
+      type: "scroll",
       data: [
         p.labels.actual,
         p.labels.fitted,
@@ -476,6 +479,8 @@ export function fanChartOption(p: {
     tooltip: { trigger: "axis", valueFormatter: (v: unknown) => (typeof v === "number" ? fmt(v, 3, p.locale) : "—") },
     legend: {
       bottom: 0,
+      // one scrollable row: on narrow (phone) charts a wrapped legend would overlap the x axis
+      type: "scroll",
       data: [
         p.labels.median,
         ...p.bands.map((b, i) => ({ name: b.label, icon: "roundRect", itemStyle: { color: col[0], opacity: Math.min(1, 0.25 + 2.5 * (0.1 + 0.08 * i)) } })),
@@ -638,7 +643,7 @@ export function columnOption(p: {
       axisPointer: { type: "shadow" },
       valueFormatter: (v: unknown) => (p.yPercent ? fmtPct(Number(v), 2, p.locale) : fmt(Number(v), 2, p.locale)),
     },
-    legend: p.series.length > 1 ? { bottom: 0 } : undefined,
+    legend: p.series.length > 1 ? { bottom: 0, type: "scroll" } : undefined,
     grid: { left: 72, right: 24, top: p.title ? 40 : 20, bottom: p.series.length > 1 ? 64 : 44 },
     xAxis: { type: "category", data: p.categories.map(String), name: p.xName, nameLocation: "middle", nameGap: 28, axisLabel: { color: ink() } },
     yAxis: valueAxis(p.yName, p.locale, p.yPercent, { scale: false, nameGap: 56 }),
@@ -690,7 +695,7 @@ export function breakEvenOption(p: {
   return {
     ...baseOption(),
     tooltip: { trigger: "axis", valueFormatter: (v: unknown) => fmt(Number(v), 2, p.locale) },
-    legend: { bottom: 0 },
+    legend: { bottom: 0, type: "scroll" },
     grid: { left: 80, right: 28, top: 24, bottom: 64 },
     xAxis: { ...valueAxis(p.labels.units, p.locale, false, { scale: false }), nameGap: 28, splitLine: { show: false } },
     yAxis: valueAxis(p.labels.amount, p.locale, false, { scale: false, nameGap: 62 }),
