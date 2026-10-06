@@ -47,6 +47,11 @@ async function icons() {
     await page.screenshot({ path: out("apps/web/public", file), omitBackground: true });
     console.log("✓ apps/web/public/" + file);
   }
+  // desktop installers (electron-builder derives .icns / .ico from a 1024 px PNG)
+  await page.setViewport({ width: 1024, height: 1024, deviceScaleFactor: 1 });
+  await page.setContent(`<html><body style="margin:0;background:transparent">${svg.replace('width="512" height="512"', 'width="1024" height="1024"')}</body></html>`);
+  await page.screenshot({ path: out("apps/desktop/build", "icon.png"), omitBackground: true });
+  console.log("✓ apps/desktop/build/icon.png");
   await page.close();
 }
 

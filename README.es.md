@@ -28,6 +28,7 @@
 
 <p align="center">
   <a href="https://fernandevdaza.github.io/openrisksim/"><b>🌐 Abrir la app</b></a> ·
+  <a href="https://github.com/fernandevdaza/openrisksim/releases"><b>⬇️ Descargar para escritorio</b></a> ·
   <a href="https://fernandevdaza.github.io/openrisksim/docs/"><b>📖 Documentación</b></a> ·
   <a href="https://fernandevdaza.github.io/openrisksim/docs/tutorial/evaluacion-de-proyecto"><b>🎓 Tutorial</b></a> ·
   <a href="#-desarrollo"><b>🛠️ Desarrollo</b></a>
@@ -132,6 +133,24 @@ GPU. Más detalles en la [guía de aceleración](https://fernandevdaza.github.io
 Después abre tu propio `.xlsx`, selecciona una celda de entrada y pulsa **Definir supuesto**. La
 **[documentación](https://fernandevdaza.github.io/openrisksim/docs/)** recorre paso a paso un trabajo completo de
 evaluación de proyectos, como los de clase.
+
+## ⬇️ App de escritorio
+
+¿Prefieres una app normal? Los instaladores para **macOS, Windows y Linux** están en
+**[Releases](https://github.com/fernandevdaza/openrisksim/releases)**:
+
+| Sistema | Archivo |
+|---|---|
+| macOS (Apple Silicon / Intel) | `OpenRiskSim-x.y.z-mac-arm64.dmg` · `OpenRiskSim-x.y.z-mac-x64.dmg` |
+| Windows (x64 / ARM64) | `OpenRiskSim-x.y.z-win-x64-setup.exe` · `…-win-arm64-setup.exe` |
+| Linux (x64 / ARM64) | `OpenRiskSim-x.y.z-linux-x86_64.AppImage` · `…-linux-amd64.deb` (y ARM64) |
+
+> [!NOTE]
+> Las apps todavía no están firmadas. **macOS:** la primera vez, clic derecho sobre la app → *Abrir*
+> (o ejecuta `xattr -cr /Applications/OpenRiskSim.app`). **Windows:** si aparece SmartScreen, pulsa *Más información* → *Ejecutar de todas formas*.
+
+Es la misma app que la versión web (mismos archivos, mismos resultados) y funciona sin conexión. Cada push también
+compila los instaladores en GitHub Actions ([workflow Desktop apps](https://github.com/fernandevdaza/openrisksim/actions/workflows/desktop.yml) → *Artifacts*).
 
 ## 🔁 ¿Vienes de Risk Simulator?
 

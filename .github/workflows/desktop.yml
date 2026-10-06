@@ -1,0 +1,67 @@
+name: Desktop apps
+
+# Builds the Electron installers for macOS, Windows and Linux on every push and pull request
+# (downloadable from the run's "Artifacts" section for 14 days). Pushing a tag vX.Y.Z also
+# attaches them to a draft GitHub release, published by hand from the Releases tab.
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS (dmg · Apple Silicon + Intel)
+            args: --mac
+            artifact: openrisksim-macos
+          - os: windows-latest
+            name: Windows (installer · x64 + ARM64)
+            args: --win
+            artifact: openrisksim-windows
+          - os: ubuntu-latest
+            name: Linux (AppImage · deb · x64 + ARM64)
+            args: --linux
+            artifact: openrisksim-linux
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the web app
+        run: pnpm --filter @openrisksim/web build
+      - name: Copy it into the desktop app
+        run: node apps/desktop/scripts/copy-web.mjs
+      - name: Package with electron-builder
+        working-directory: apps/desktop
+        run: pnpm exec electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          retention-days: 14
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+          if-no-files-found: error
