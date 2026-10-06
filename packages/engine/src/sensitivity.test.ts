@@ -100,6 +100,42 @@ suite("tornado / spider / scenarioTable", () => {
     expect(spider(model(), ev, base, 0)[0].percentiles).toHaveLength(9);
   });
 
+  it("tornado: ±% of the base value (Risk Simulator style) ignores the distributions", () => {
+    // ±10 %: small 0.45/0.55 → swing 0.1; big 4.5/5.5 → 1; neg 1.8/2.2 → 0.8; trunc base 0 → 0
+    const t = tornado(model(), ev, base, 0, { method: "percentChange", change: 0.1 });
+    expect(t.map((e) => e.assumptionId)).toEqual(["big", "neg", "small", "trunc"]);
+    expect(t[0].lowInput).toBeCloseTo(4.5, 12);
+    expect(t[0].highInput).toBeCloseTo(5.5, 12);
+    expect(t[0].swing).toBeCloseTo(1, 12);
+    expect(t[1].swing).toBeCloseTo(0.8, 12);
+    expect(t[3].swing).toBe(0);
+    const t20 = tornado(model(), ev, base, 0, { method: "percentChange", change: 0.2 });
+    expect(t20[0].swing).toBeCloseTo(2, 12);
+  });
+
+  it("tornado: grouped assumptions move together as one variable", () => {
+    // small + big together, ±10 %: (0.45 + 4.5) vs (0.55 + 5.5) → swing 1.1, beats neg (0.8)
+    const t = tornado(model(), ev, base, 0, { method: "percentChange", groups: [["small", "big"]] });
+    expect(t).toHaveLength(3);
+    expect(t[0].assumptionId).toBe("small");
+    expect(t[0].assumptionIds).toEqual(["small", "big"]);
+    expect(t[0].swing).toBeCloseTo(1.1, 12);
+    expect(t.find((e) => e.assumptionId === "neg")?.assumptionIds).toBeUndefined();
+    // percentiles: small 0.1/0.9 + big 1/9 → swing 8.8
+    const p = tornado(model(), ev, base, 0, { groups: [["small", "big"]] });
+    expect(p[0].swing).toBeCloseTo(8.8, 12);
+    // disabled or unknown ids in a group are ignored
+    expect(tornado(model(), ev, base, 0, { groups: [["off", "nope"]] })).toHaveLength(4);
+  });
+
+  it("spider: ±% positions and groups", () => {
+    const s = spider(model(), ev, base, 0, { method: "percentChange", change: 0.1, groups: [["small", "big"]] });
+    expect(s.map((x) => x.assumptionId)).toEqual(["small", "neg", "trunc"]);
+    expect(s[0].percentiles[0]).toBeCloseTo(-0.1, 12);
+    expect(s[0].percentiles[8]).toBeCloseTo(0.1, 12);
+    expect(s[0].outputs[8] - s[0].outputs[0]).toBeCloseTo(1.1, 12);
+  });
+
   it("scenario table varies two inputs", () => {
     const tab = scenarioTable(ev, base, 0, [0, 1], 1, [10, 20, 30], 0);
     expect(tab).toEqual([

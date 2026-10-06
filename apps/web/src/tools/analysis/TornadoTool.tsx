@@ -4,11 +4,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Play } from "lucide-react";
 import { tornado, spider } from "@openrisksim/engine";
-import type { SpiderSeries, TornadoEntry } from "@openrisksim/core";
-import { Button, Chart, Tabs, Table } from "../../components/ui";
+import type { RiskModel, SensitivityMethod, SpiderSeries, TornadoEntry } from "@openrisksim/core";
+import { Button, Chart, Field, Select, Tabs, Table } from "../../components/ui";
 import { useModelStore } from "../../store/model";
 import { useToolsT } from "../common/i18n";
-import { ErrorNote, ExportButton, ForecastSelect, HelpBox, Note, PctField, Section, SplitLayout, NumField } from "../common/ui";
+import { Checkbox, ErrorNote, ExportButton, ForecastSelect, HelpBox, Note, PctField, Section, SplitLayout, NumField } from "../common/ui";
 import { ToolError, enabledAssumptions, withEvaluator } from "../common/workbook";
 import { fmt, fmtPct } from "../common/format";
 import { lineOption, tornadoOption, MAX_SERIES } from "../common/charts";
@@ -16,7 +16,30 @@ import { linspace } from "../common/parse";
 
 type Mode = "tornado" | "spider";
 
+const METHOD_KEY = "openrisksim.tornado.method";
+function savedMethod(): SensitivityMethod {
+  try {
+    return localStorage.getItem(METHOD_KEY) === "percentChange" ? "percentChange" : "percentile";
+  } catch {
+    return "percentile";
+  }
+}
+
+/** Enabled assumptions that share a name (e.g. "Producción" in years 1, 2 and 3) → candidate groups. */
+export function sameNameGroups(model: RiskModel): string[][] {
+  const byName = new Map<string, string[]>();
+  for (const a of model.assumptions) {
+    if (!a.enabled) continue;
+    const key = a.name.trim().toLowerCase();
+    if (!key) continue;
+    byName.set(key, [...(byName.get(key) ?? []), a.id]);
+  }
+  return [...byName.values()].filter((ids) => ids.length > 1);
+}
+
 interface Computed {
+  method: SensitivityMethod;
+  change: number;
   forecastName: string;
   base: number;
   entries: TornadoEntry[];
@@ -32,13 +55,27 @@ function TornadoSpider({ initial }: { initial: Mode }) {
   const [pLow, setPLow] = useState(0.1);
   const [pHigh, setPHigh] = useState(0.9);
   const [points, setPoints] = useState(9);
+  const [method, setMethodState] = useState<SensitivityMethod>(savedMethod);
+  const [change, setChange] = useState(0.1);
+  const groupCandidates = useMemo(() => sameNameGroups(model), [model]);
+  const [groupSame, setGroupSame] = useState(true);
+  const setMethod = (m: SensitivityMethod) => {
+    setMethodState(m);
+    try {
+      localStorage.setItem(METHOD_KEY, m);
+    } catch {
+      /* ignore */
+    }
+  };
   const [res, setRes] = useState<Computed | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  const nameOf = (id: string) => {
+  const nameOf = (id: string, ids?: string[]) => {
     const a = model.assumptions.find((x) => x.id === id);
-    return a ? a.name || `${a.cell.sheet}!${a.cell.address}` : id;
+    const name = a ? a.name || `${a.cell.sheet}!${a.cell.address}` : id;
+    return ids && ids.length > 1 ? t("tornado.groupedName", { name, n: ids.length }) : name;
   };
+  const isGroup = (e: { assumptionIds?: string[] }) => (e.assumptionIds?.length ?? 1) > 1;
 
   const run = () => {
     setError(null);
@@ -48,18 +85,22 @@ function TornadoSpider({ initial }: { initial: Mode }) {
       if (fIdx < 0) throw new ToolError("common.errors.noForecast");
       const enabled = enabledAssumptions(m);
       if (!enabled.length) throw new ToolError("common.errors.noAssumptions");
-      if (!(pLow < pHigh)) throw new ToolError("tornado.errors.percentiles");
+      if (method === "percentile" && !(pLow < pHigh)) throw new ToolError("tornado.errors.percentiles");
+      if (method === "percentChange" && !(change > 0 && change < 1)) throw new ToolError("tornado.errors.change");
+      const groups = groupSame ? sameNameGroups(m) : [];
+      const opts = { method, pLow, pHigh, change, groups };
       const out = withEvaluator(m, (ev) => {
         const baseIn = ev.baseInputs();
         const base = ev.evaluate(baseIn)[fIdx];
-        const entries = tornado(m, ev, baseIn, fIdx, { pLow, pHigh });
-        const ps = linspace(pLow, pHigh, Math.max(3, Math.round(points)));
-        const sp = spider(m, ev, baseIn, fIdx, ps);
+        const entries = tornado(m, ev, baseIn, fIdx, opts);
+        const n = Math.max(3, Math.round(points));
+        const positions = method === "percentChange" ? linspace(-change, change, n) : linspace(pLow, pHigh, n);
+        const sp = spider(m, ev, baseIn, fIdx, { ...opts, positions });
         const baseInputs: Record<string, number> = {};
         enabled.forEach((a, i) => (baseInputs[a.id] = baseIn[i]));
         return { base, entries, spider: sp, baseInputs };
       });
-      setRes({ ...out, forecastName: m.forecasts[fIdx].name });
+      setRes({ ...out, method, change, forecastName: m.forecasts[fIdx].name });
     } catch (e) {
       setRes(null);
       setError(e);
@@ -76,12 +117,14 @@ function TornadoSpider({ initial }: { initial: Mode }) {
   const tornadoChart = useMemo(() => {
     if (!res) return null;
     return tornadoOption({
-      names: res.entries.map((e) => nameOf(e.assumptionId)),
+      names: res.entries.map((e) => nameOf(e.assumptionId, e.assumptionIds)),
       outputAtLow: res.entries.map((e) => e.outputAtLow),
       outputAtHigh: res.entries.map((e) => e.outputAtHigh),
       base: res.base,
-      lowLabel: t("tornado.lowInput", { p: fmtPct(pLow, 0, locale) }),
-      highLabel: t("tornado.highInput", { p: fmtPct(pHigh, 0, locale) }),
+      lowLabel:
+        res.method === "percentChange" ? t("tornado.lowChange", { p: fmtPct(res.change, 0, locale) }) : t("tornado.lowInput", { p: fmtPct(pLow, 0, locale) }),
+      highLabel:
+        res.method === "percentChange" ? t("tornado.highChange", { p: fmtPct(res.change, 0, locale) }) : t("tornado.highInput", { p: fmtPct(pHigh, 0, locale) }),
       baseLabel: t("tornado.base"),
       locale,
     });
@@ -101,8 +144,8 @@ function TornadoSpider({ initial }: { initial: Mode }) {
       xType: "value",
       x: spiderSeries[0].percentiles,
       xPercent: true,
-      series: spiderSeries.map((s) => ({ name: nameOf(s.assumptionId), data: s.outputs, x: s.percentiles })),
-      xName: t("tornado.percentileAxis"),
+      series: spiderSeries.map((s) => ({ name: nameOf(s.assumptionId, s.assumptionIds), data: s.outputs, x: s.percentiles })),
+      xName: res.method === "percentChange" ? t("tornado.changeAxis") : t("tornado.percentileAxis"),
       yName: res.forecastName,
       locale,
       markLines: [{ y: res.base, label: t("tornado.base") }],
@@ -113,10 +156,37 @@ function TornadoSpider({ initial }: { initial: Mode }) {
   const form = (
     <>
       <ForecastSelect value={forecastId} onChange={setForecastId} />
-      <div className="grid grid-cols-2 gap-2">
-        <PctField label={t("tornado.pLow")} value={pLow} onChange={setPLow} />
-        <PctField label={t("tornado.pHigh")} value={pHigh} onChange={setPHigh} />
-      </div>
+      <Field
+        label={t("tornado.method")}
+        hint={method === "percentChange" ? t("tornado.methodHintChange") : t("tornado.methodHintPercentile")}
+      >
+        <Select<SensitivityMethod>
+          value={method}
+          onChange={setMethod}
+          options={[
+            { value: "percentile", label: t("tornado.methodPercentile") },
+            { value: "percentChange", label: t("tornado.methodChange") },
+          ]}
+        />
+      </Field>
+      {method === "percentile" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <PctField label={t("tornado.pLow")} value={pLow} onChange={setPLow} />
+          <PctField label={t("tornado.pHigh")} value={pHigh} onChange={setPHigh} />
+        </div>
+      ) : (
+        <PctField label={t("tornado.change")} value={change} onChange={setChange} />
+      )}
+      {groupCandidates.length > 0 && (
+        <div className="space-y-1">
+          <Checkbox checked={groupSame} onChange={setGroupSame} label={t("tornado.groupSameName")} />
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {t("tornado.groupHint", {
+              names: groupCandidates.map((ids) => `${nameOf(ids[0])} (${ids.length})`).join(", "),
+            })}
+          </p>
+        </div>
+      )}
       {mode === "spider" && <NumField label={t("tornado.points")} value={points} min={3} max={21} onChange={setPoints} />}
       <Button variant="primary" onClick={run} disabled={!forecastId}>
         <Play size={14} />
@@ -149,7 +219,7 @@ function TornadoSpider({ initial }: { initial: Mode }) {
             </Section>
             <Note>
               {res.entries.length > 0
-                ? t("tornado.interpretation", { name: nameOf(res.entries[0].assumptionId), share: fmtPct(totalSq ? (res.entries[0].swing ** 2) / totalSq : 0, 0, locale) })
+                ? t("tornado.interpretation", { name: nameOf(res.entries[0].assumptionId, res.entries[0].assumptionIds), share: fmtPct(totalSq ? (res.entries[0].swing ** 2) / totalSq : 0, 0, locale) })
                 : t("tornado.noEntries")}
             </Note>
             <Section
@@ -163,10 +233,10 @@ function TornadoSpider({ initial }: { initial: Mode }) {
                     [],
                     [t("common.assumption"), t("tornado.inputLow"), t("tornado.baseInput"), t("tornado.inputHigh"), t("tornado.outputLow"), t("tornado.outputHigh"), t("tornado.swing"), t("tornado.share")],
                     ...res.entries.map((e) => [
-                      nameOf(e.assumptionId),
-                      e.lowInput,
-                      res.baseInputs[e.assumptionId] ?? null,
-                      e.highInput,
+                      nameOf(e.assumptionId, e.assumptionIds),
+                      isGroup(e) ? null : e.lowInput,
+                      isGroup(e) ? null : (res.baseInputs[e.assumptionId] ?? null),
+                      isGroup(e) ? null : e.highInput,
                       e.outputAtLow,
                       e.outputAtHigh,
                       e.swing,
@@ -189,12 +259,15 @@ function TornadoSpider({ initial }: { initial: Mode }) {
                 ]}
                 rows={res.entries.map((e) => ({
                   ...e,
-                  name: nameOf(e.assumptionId),
-                  baseInput: res.baseInputs[e.assumptionId],
+                  name: nameOf(e.assumptionId, e.assumptionIds),
+                  lowInput: isGroup(e) ? NaN : e.lowInput,
+                  highInput: isGroup(e) ? NaN : e.highInput,
+                  baseInput: isGroup(e) ? NaN : res.baseInputs[e.assumptionId],
                   share: totalSq ? (e.swing * e.swing) / totalSq : NaN,
                 }))}
                 maxHeight={320}
               />
+              {res.entries.some(isGroup) && <Note>{t("tornado.groupedNote")}</Note>}
             </Section>
           </>
         )}
@@ -213,7 +286,7 @@ function TornadoSpider({ initial }: { initial: Mode }) {
                   build={() => [
                     [t("tornado.spiderTitle", { name: res.forecastName })],
                     [t("common.assumption"), ...(res.spider[0]?.percentiles ?? []).map((p) => fmtPct(p, 0, locale))],
-                    ...res.spider.map((s) => [nameOf(s.assumptionId), ...s.outputs]),
+                    ...res.spider.map((s) => [nameOf(s.assumptionId, s.assumptionIds), ...s.outputs]),
                   ]}
                 />
               }
@@ -229,7 +302,7 @@ function TornadoSpider({ initial }: { initial: Mode }) {
                   })),
                 ]}
                 rows={res.spider.map((s) => {
-                  const row: Record<string, unknown> = { name: nameOf(s.assumptionId) };
+                  const row: Record<string, unknown> = { name: nameOf(s.assumptionId, s.assumptionIds) };
                   s.outputs.forEach((o, i) => (row[`p${i}`] = o));
                   return row;
                 })}

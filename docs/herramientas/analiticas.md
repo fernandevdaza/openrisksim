@@ -30,8 +30,11 @@ Las herramientas que trabajan con datos (ajuste, bootstrap, prueba de hipótesis
 
 **Cómo se usa.**
 1. Elige el **Pronóstico**.
-2. Ajusta **Percentil bajo (%)** y **Percentil alto (%)** si quieres (por ejemplo 5 y 95 para rangos más amplios).
-3. Pulsa **Calcular**.
+2. Elige el **Método**:
+   - **Percentiles de la distribución** (por defecto): ajusta **Percentil bajo (%)** y **Percentil alto (%)** si quieres (por ejemplo 5 y 95 para rangos más amplios).
+   - **± % del valor base (como Risk Simulator)**: mueve cada variable un mismo porcentaje (**Variación ±**, por defecto 10 %) sin mirar su distribución.
+3. Si varios supuestos tienen **el mismo nombre** (por ejemplo «Producción» del año 1, 2 y 3), marca **Agrupar supuestos con el mismo nombre** para moverlos juntos como una sola variable. En la tabla aparecen como «Producción (×3)».
+4. Pulsa **Calcular**.
 
 ![Tornado del VAN en el ejemplo de evaluación de proyecto](/screenshots/es/tornado.png)
 
@@ -43,6 +46,14 @@ Las herramientas que trabajan con datos (ajuste, bootstrap, prueba de hipótesis
 
 ::: tip
 El tornado no requiere simular y es rápido. Úsalo al principio para decidir qué variables modelar como supuestos y al final para explicar el riesgo en tu informe.
+:::
+
+::: info ¿Por qué mi tornado no tiene el mismo orden que el de Risk Simulator?
+Risk Simulator, por defecto, mueve cada variable **±10 % de su valor base**. Con **percentiles**, OpenRiskSim usa la incertidumbre que tú definiste: una variable con una distribución amplia o sesgada (por ejemplo costos variables triangular 3,5 – **4** – 6, cuyo P90 está 32 % arriba de la base) pesa más que una con poco margen (producción 16 000 – **20 000** – 20 500, cuyo P90 está solo 0,1 % arriba). Las dos respuestas son correctas pero responden preguntas distintas:
+- **± %**: ¿qué variable mueve más el resultado si todas cambian lo mismo?
+- **Percentiles**: ¿qué variable mueve más el resultado con la incertidumbre real de cada una?
+
+Además, si un mismo concepto está repartido en varias celdas con supuestos separados, agrúpalas para que el tornado no reparta su efecto en varias barras pequeñas. Para reproducir Risk Simulator usa **± % del valor base** con 10 % y agrupa.
 :::
 
 ::: warning Limitación

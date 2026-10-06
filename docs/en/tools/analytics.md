@@ -30,8 +30,11 @@ Tools that work with data (fitting, bootstrap, hypothesis test, descriptive stat
 
 **How to use it.**
 1. Choose the **Forecast**.
-2. Adjust **Low percentile (%)** and **High percentile (%)** if you like (e.g. 5 and 95 for wider ranges).
-3. Click **Calculate**.
+2. Choose the **Method**:
+   - **Distribution percentiles** (default): adjust **Low percentile (%)** and **High percentile (%)** if you like (e.g. 5 and 95 for wider ranges).
+   - **± % of base value (like Risk Simulator)**: moves every variable by the same percentage (**Change ±**, 10 % by default), regardless of its distribution.
+3. If several assumptions share **the same name** (e.g. "Production" in years 1, 2 and 3), tick **Group assumptions with the same name** to move them together as one variable. They show up as "Production (×3)".
+4. Click **Calculate**.
 
 ![NPV tornado in the project-evaluation example](/screenshots/en/tornado.png)
 
@@ -43,6 +46,14 @@ Tools that work with data (fitting, bootstrap, hypothesis test, descriptive stat
 
 ::: tip
 The tornado doesn't need a simulation and is fast. Use it at the start to decide which variables to model as assumptions, and at the end to explain the risk in your report.
+:::
+
+::: info Why doesn't my tornado have the same order as Risk Simulator's?
+By default Risk Simulator moves each variable **±10 % of its base value**. With **percentiles**, OpenRiskSim uses the uncertainty you defined: a variable with a wide or skewed distribution (e.g. variable costs triangular 3.5 – **4** – 6, whose P90 is 32 % above base) weighs more than one with little room (production 16,000 – **20,000** – 20,500, whose P90 is only 0.1 % above). Both are right but answer different questions:
+- **± %**: which variable moves the result most if they all change by the same amount?
+- **Percentiles**: which variable moves the result most given each one's real uncertainty?
+
+Also, if one concept is spread over several cells with separate assumptions, group them so the tornado doesn't split its effect into several small bars. To reproduce Risk Simulator use **± % of base value** at 10 % and group.
 :::
 
 ::: warning Limitation

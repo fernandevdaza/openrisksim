@@ -56,9 +56,19 @@ export interface SensitivityEntry {
   contributionToVariance: number;
 }
 
-/** Deterministic tornado entry (one-at-a-time, low/high percentile of the assumption). */
+/**
+ * How one-at-a-time sensitivity moves each input:
+ *  - percentile:    to the pLow / pHigh percentiles of its distribution (uses the uncertainty you defined);
+ *  - percentChange: to base × (1 ∓ change), e.g. ±10 % — Risk Simulator's default for Tornado/Spider.
+ */
+export type SensitivityMethod = "percentile" | "percentChange";
+
+/** Deterministic tornado entry (one-at-a-time, low/high value of one variable). */
 export interface TornadoEntry {
+  /** First assumption of the variable (the only one unless several were grouped). */
   assumptionId: string;
+  /** All assumptions moved together as one variable (present when grouped, length ≥ 1). */
+  assumptionIds?: string[];
   baseOutput: number;
   lowInput: number;
   highInput: number;
@@ -71,7 +81,9 @@ export interface TornadoEntry {
 /** Spider chart series: output as the assumption moves across percentiles. */
 export interface SpiderSeries {
   assumptionId: string;
-  /** e.g. [0.1, 0.2, ..., 0.9] */
+  /** All assumptions moved together (present when grouped). */
+  assumptionIds?: string[];
+  /** Positions on the x axis: percentiles (e.g. [0.1, …, 0.9]) or relative changes (e.g. [-0.1, …, 0.1]). */
   percentiles: number[];
   inputs: number[];
   outputs: number[];

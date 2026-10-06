@@ -49,8 +49,8 @@
     }
   },
   "tornado": {
-    "help1": "Tornado analysis moves each assumption, one at a time, from a low percentile to a high one (e.g. P10 and P90) while keeping the others at their base value, and measures how much the forecast changes.",
-    "help2": "The spider chart shows how the forecast responds as each assumption moves across several percentiles: steeper lines mean more influential variables.",
+    "help1": "Tornado analysis moves each assumption, one at a time, to a low and a high value while keeping the others at their base value, and measures how much the forecast changes. It can use each assumption's distribution percentiles (P10 and P90, reflecting the uncertainty you defined) or a fixed ± % of the base value (±10 %, like Risk Simulator).",
+    "help2": "The spider chart shows how the forecast responds as each assumption moves across several values: steeper lines mean more influential variables.",
     "tornadoTab": "Tornado",
     "spiderTab": "Spider",
     "pLow": "Low percentile",
@@ -77,8 +77,22 @@
     "sheetName": "Tornado",
     "spiderSheetName": "Spider",
     "errors": {
-      "percentiles": "The low percentile must be lower than the high one."
-    }
+      "percentiles": "The low percentile must be lower than the high one.",
+      "change": "The change must be between 0 % and 100 %."
+    },
+    "method": "Method",
+    "methodPercentile": "Distribution percentiles",
+    "methodChange": "± % of base value (like Risk Simulator)",
+    "methodHintPercentile": "Uses each assumption's real uncertainty: a variable with a wide or skewed distribution weighs more.",
+    "methodHintChange": "Moves every variable by the same percentage, regardless of its distribution. This is Risk Simulator's default method.",
+    "change": "Change ±",
+    "lowChange": "Input −{{p}}",
+    "highChange": "Input +{{p}}",
+    "changeAxis": "Change from base value",
+    "groupSameName": "Group assumptions with the same name",
+    "groupHint": "They will move together as one variable: {{names}}.",
+    "groupedName": "{{name}} (×{{n}})",
+    "groupedNote": "Rows marked ×N group several cells that move together, so a single low/high input is not shown."
   },
   "sensitivity": {
     "help1": "Uses the results of the last simulation. The rank (Spearman) correlation shows the direction and strength of the relation between each assumption and the forecast.",

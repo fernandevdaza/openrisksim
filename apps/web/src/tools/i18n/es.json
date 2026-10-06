@@ -49,8 +49,8 @@
     }
   },
   "tornado": {
-    "help1": "El análisis tornado mueve cada supuesto, uno a la vez, desde un percentil bajo hasta uno alto (por ejemplo P10 y P90) dejando los demás en su valor base, y mide cuánto cambia el pronóstico.",
-    "help2": "El gráfico araña muestra cómo responde el pronóstico cuando cada supuesto recorre varios percentiles: líneas más inclinadas indican variables más influyentes.",
+    "help1": "El análisis tornado mueve cada supuesto, uno a la vez, hasta un valor bajo y uno alto dejando los demás en su valor base, y mide cuánto cambia el pronóstico. Puede usar los percentiles de la distribución de cada supuesto (P10 y P90, refleja la incertidumbre que usted definió) o un ± % fijo del valor base (±10 %, como Risk Simulator).",
+    "help2": "El gráfico araña muestra cómo responde el pronóstico cuando cada supuesto recorre varios valores: líneas más inclinadas indican variables más influyentes.",
     "tornadoTab": "Tornado",
     "spiderTab": "Araña",
     "pLow": "Percentil bajo",
@@ -77,8 +77,22 @@
     "sheetName": "Tornado",
     "spiderSheetName": "Araña",
     "errors": {
-      "percentiles": "El percentil bajo debe ser menor que el alto."
-    }
+      "percentiles": "El percentil bajo debe ser menor que el alto.",
+      "change": "La variación debe estar entre 0 % y 100 %."
+    },
+    "method": "Método",
+    "methodPercentile": "Percentiles de la distribución",
+    "methodChange": "± % del valor base (como Risk Simulator)",
+    "methodHintPercentile": "Usa la incertidumbre real de cada supuesto: una variable con una distribución amplia o sesgada pesa más.",
+    "methodHintChange": "Mueve todas las variables el mismo porcentaje, sin mirar su distribución. Es el método por defecto de Risk Simulator.",
+    "change": "Variación ±",
+    "lowChange": "Entrada −{{p}}",
+    "highChange": "Entrada +{{p}}",
+    "changeAxis": "Variación respecto al valor base",
+    "groupSameName": "Agrupar supuestos con el mismo nombre",
+    "groupHint": "Se moverán juntos como una sola variable: {{names}}.",
+    "groupedName": "{{name}} (×{{n}})",
+    "groupedNote": "Las filas marcadas con ×N agrupan varias celdas que se mueven juntas; por eso no se muestra una sola entrada baja/alta."
   },
   "sensitivity": {
     "help1": "Usa los resultados de la última simulación. La correlación de rangos (Spearman) indica la dirección y fuerza de la relación entre cada supuesto y el pronóstico.",

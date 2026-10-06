@@ -4,5 +4,6 @@ export { describe, histogram, percentile, certainty, pearson, spearman, empirica
 export { runSimulation, runSimulationBatched, prepareSimulation, batchEvaluatorFromModelEvaluator } from "./runner";
 export type { RunOptions, BatchEvaluator, BatchedRunOptions, PreparedSimulation } from "./runner";
 export { computeSensitivity, tornado, spider, scenarioTable } from "./sensitivity";
+export type { OneAtATimeOptions } from "./sensitivity";
 export { bootstrap } from "./bootstrap";
 export { tTestTwoSample } from "./tests";
