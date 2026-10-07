@@ -3,6 +3,20 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.2.0] — 2026-10-07
+
+### Added
+- **Desktop apps** for macOS (dmg, Apple Silicon + Intel), Windows (installer, x64 + ARM64) and Linux (AppImage + deb,
+  x64 + ARM64), built with Electron; installers are attached to each release and built by CI on every push.
+- **Excel-like formula editing**: click-to-reference (Point mode) with coloured reference boxes, F4, localized function
+  autocomplete with argument tooltips, Insert Function dialog, fill handle and Ctrl+D/R/Enter, copy/cut/paste with
+  reference adjustment and paste values, Formulas tab (AutoSum, show formulas, trace precedents/dependents, evaluate
+  formula, defined names), explained error cells and syntax checks, expandable formula bar.
+- **Tornado / spider**: "± % of base value" method (Risk Simulator style) and grouping of assumptions with the same name.
+- **Mobile layout**: scrollable ribbon, bottom navigation with run button, model drawer, full-screen results, dialogs
+  and tools; touch-friendly grid.
+- Documentation: new Formulas guide; tornado methods and why rankings can differ from Risk Simulator.
+
 ## [0.1.0] — 2026-10-05
 
 First public release.
@@ -30,4 +44,5 @@ First public release.
 - Five example models, English/Spanish interface, light/dark themes, autosave.
 - Documentation site (Spanish and English).
 
+[0.2.0]: https://github.com/fernandevdaza/openrisksim/releases/tag/v0.2.0
 [0.1.0]: https://github.com/fernandevdaza/openrisksim/releases/tag/v0.1.0

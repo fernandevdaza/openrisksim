@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-2dd4bf?style=flat-square" alt="version 0.1.0">
+  <img src="https://img.shields.io/badge/version-0.2.0-2dd4bf?style=flat-square" alt="version 0.2.0">
   <a href="https://github.com/fernandevdaza/openrisksim/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/fernandevdaza/openrisksim/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/badge/tests-563-22c55e?style=flat-square" alt="563 tests">
   <img src="https://img.shields.io/badge/distributions-33-8b5cf6?style=flat-square" alt="33 distributions">

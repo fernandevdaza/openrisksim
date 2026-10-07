@@ -1,7 +1,7 @@
 {
   "name": "openrisksim",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Open-source Monte Carlo risk simulation, forecasting and optimization for spreadsheets (an alternative to Risk Simulator / @RISK / Crystal Ball).",
   "license": "GPL-3.0-or-later",
   "type": "module",

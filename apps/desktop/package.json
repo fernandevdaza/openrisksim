@@ -1,7 +1,7 @@
 {
   "name": "@openrisksim/desktop",
   "productName": "OpenRiskSim",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "GPL-3.0-or-later",
   "description": "OpenRiskSim desktop app: Monte Carlo risk simulation, forecasting and optimization for spreadsheets.",
