@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { clsx } from "../components/ui";
 import { useWorkbookStore } from "../store/workbook";
-import { commitEdit } from "./editState";
+import { canPoint, commitEdit, focusEditor, useEditStore } from "./editState";
 
 export function SheetTabs() {
   const { t } = useTranslation();
@@ -16,8 +16,20 @@ export function SheetTabs() {
           key={name}
           role="tab"
           aria-selected={name === active}
+          onMouseDown={(e) => {
+            // pointing at another sheet while editing a formula: keep the editor focused
+            if (canPoint()) e.preventDefault();
+          }}
           onClick={() => {
-            commitEdit();
+            const ed = useEditStore.getState().editing;
+            if (ed && canPoint()) {
+              // Excel: the edit continues in the formula bar while you pick cells on another sheet
+              if (ed.source !== "bar") useEditStore.getState().patch({ source: "bar" });
+              useWorkbookStore.getState().setActiveSheet(name);
+              requestAnimationFrame(focusEditor);
+              return;
+            }
+            if (!commitEdit()) return;
             useWorkbookStore.getState().setActiveSheet(name);
           }}
           className={clsx(

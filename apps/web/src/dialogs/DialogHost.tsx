@@ -9,6 +9,9 @@ import { CorrelationDialog } from "./CorrelationDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { ConfirmDialog, ExamplesDialog, ReportDialog } from "./FileDialogs";
 import { HelpDialog } from "./HelpDialog";
+import { InsertFunctionDialog } from "./InsertFunctionDialog";
+import { EvaluateFormulaDialog } from "./EvaluateFormulaDialog";
+import { NamesDialog } from "./NamesDialog";
 
 /** Renders the active shell dialog. */
 export function DialogHost() {
@@ -32,6 +35,12 @@ export function DialogHost() {
       return <ReportDialog onClose={close} />;
     case "help":
       return <HelpDialog tab={dialog.tab} onClose={close} />;
+    case "insertFunction":
+      return <InsertFunctionDialog fn={dialog.fn} onClose={close} />;
+    case "evaluateFormula":
+      return <EvaluateFormulaDialog cell={dialog.cell} onClose={close} />;
+    case "names":
+      return <NamesDialog onClose={close} />;
     case "confirm":
       return <ConfirmDialog {...dialog} onClose={close} />;
   }

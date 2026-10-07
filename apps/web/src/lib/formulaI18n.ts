@@ -1,165 +1,161 @@
 /**
- * Spanish Excel function names → English (the formula engine uses English names, like the .xlsx
- * file format). Lets students type "=SUMA(A1:A3)" or "=VNA(B1;C2:C9)" as they would in Excel-es.
+ * Formula localisation (Excel in Spanish ↔ engine syntax).
+ *
+ * The engine (HyperFormula, like the .xlsx format) stores English function names, `,` as the
+ * argument separator and `.` as the decimal separator. Students type Excel-es formulas
+ * (`=SUMA(A1:A3;2,5)`, `=VNA(B1;C2:C9)`), so:
+ *  - `toEngineFormula` turns what the user typed (in the UI locale) into engine syntax;
+ *  - `toDisplayFormula` shows an engine formula in the UI locale (Spanish names and `;` in es).
+ *
+ * Names come from the function catalog (official Excel-es names) with HyperFormula's es-ES pack as
+ * fallback for functions the catalog does not list, plus a few common aliases.
  */
-const ES_TO_EN: Record<string, string> = {
-  SUMA: "SUM",
-  PRODUCTO: "PRODUCT",
-  COCIENTE: "QUOTIENT",
-  SIGNO: "SIGN",
-  TRUNCAR: "TRUNC",
-  "MULTIPLO.SUPERIOR": "CEILING",
-  "MULTIPLO.INFERIOR": "FLOOR",
-  "REDOND.MULT": "MROUND",
-  "PROMEDIO.SI.CONJUNTO": "AVERAGEIFS",
-  "BUSCARX": "XLOOKUP",
-  TRANSPONER: "TRANSPOSE",
-  "FIN.MES": "EOMONTH",
-  "FECHA.MES": "EDATE",
-  DIAS: "DAYS",
+import { HF_FUNCTION_NAMES_ES, registeredFunctionNames } from "@openrisksim/workbook";
+import { FUNCTION_CATALOG } from "./functionCatalog";
+import { stripFnPrefix, tokenize, type Locale } from "./formulaTokens";
+import { ERR_ES_TO_EN, localizeError } from "./errorInfo";
+
+export { localizeError };
+
+/** Extra Spanish spellings accepted on input (accents, older Excel names). */
+const ES_ALIASES: Record<string, string> = {
   "DÍAS": "DAYS",
-  CRECIMIENTO: "GROWTH",
-  TENDENCIA: "TREND",
-  "ESTIMACION.LINEAL": "LINEST",
-  "COVARIANZA.M": "COVARIANCE.S",
-  "DISTR.LOGNORM": "LOGNORM.DIST",
-  "INV.LOGNORM": "LOGNORM.INV",
-  "JERARQUIA": "RANK",
-  "K.ESIMO.MAYOR": "LARGE",
-  "K.ESIMO.MENOR": "SMALL",
-  "SUMA.CUADRADOS": "SUMSQ",
-  "ESERROR": "ISERROR",
-  "ESNUMERO": "ISNUMBER",
-  "ESBLANCO": "ISBLANK",
-  "SUMA.PRODUCTO": "SUMPRODUCT",
-  SUMAPRODUCTO: "SUMPRODUCT",
-  "SUMAR.SI": "SUMIF",
-  "SUMAR.SI.CONJUNTO": "SUMIFS",
-  PROMEDIO: "AVERAGE",
-  "PROMEDIO.SI": "AVERAGEIF",
-  CONTAR: "COUNT",
-  CONTARA: "COUNTA",
-  "CONTAR.SI": "COUNTIF",
-  "CONTAR.SI.CONJUNTO": "COUNTIFS",
-  "CONTAR.BLANCO": "COUNTBLANK",
-  SI: "IF",
-  "SI.ERROR": "IFERROR",
-  Y: "AND",
-  O: "OR",
-  NO: "NOT",
-  MAX: "MAX",
-  MIN: "MIN",
-  ABS: "ABS",
-  REDONDEAR: "ROUND",
-  "REDONDEAR.MAS": "ROUNDUP",
-  "REDONDEAR.MENOS": "ROUNDDOWN",
-  ENTERO: "INT",
-  RESIDUO: "MOD",
-  POTENCIA: "POWER",
-  RAIZ: "SQRT",
-  EXP: "EXP",
-  LN: "LN",
-  LOG: "LOG",
-  LOG10: "LOG10",
-  PI: "PI",
-  VNA: "NPV",
-  TIR: "IRR",
-  TIRM: "MIRR",
-  "VNA.NO.PER": "XNPV",
-  "TIR.NO.PER": "XIRR",
-  VA: "PV",
-  VF: "FV",
-  PAGO: "PMT",
-  PAGOINT: "IPMT",
-  PAGOPRIN: "PPMT",
-  NPER: "NPER",
-  TASA: "RATE",
-  "INT.EFECTIVO": "EFFECT",
-  "TASA.NOMINAL": "NOMINAL",
-  SLN: "SLN",
-  SYD: "SYD",
-  DB: "DB",
-  DDB: "DDB",
-  BUSCARV: "VLOOKUP",
-  BUSCARH: "HLOOKUP",
-  BUSCAR: "LOOKUP",
-  INDICE: "INDEX",
-  COINCIDIR: "MATCH",
-  ELEGIR: "CHOOSE",
-  DESREF: "OFFSET",
-  HOY: "TODAY",
-  AHORA: "NOW",
-  FECHA: "DATE",
-  "AÑO": "YEAR",
-  ANO: "YEAR",
-  MES: "MONTH",
-  DIA: "DAY",
   "DÍA": "DAY",
-  CONCATENAR: "CONCATENATE",
-  TEXTO: "TEXT",
-  VALOR: "VALUE",
-  IZQUIERDA: "LEFT",
-  DERECHA: "RIGHT",
-  EXTRAE: "MID",
-  LARGO: "LEN",
-  MAYUSC: "UPPER",
-  MINUSC: "LOWER",
-  ESPACIOS: "TRIM",
-  MEDIANA: "MEDIAN",
-  MODA: "MODE",
-  "DESVEST": "STDEV",
-  "DESVEST.M": "STDEV.S",
-  "DESVEST.P": "STDEV.P",
-  "VAR.S": "VAR.S",
-  "VAR.P": "VAR.P",
-  "PERCENTIL": "PERCENTILE",
-  "PERCENTIL.INC": "PERCENTILE.INC",
-  "PRONOSTICO": "FORECAST",
+  ANO: "YEAR",
+  "ÍNDICE": "INDEX",
+  "RAÍZ": "SQRT",
+  "SUMA.PRODUCTO": "SUMPRODUCT",
   "PRONÓSTICO": "FORECAST",
-  PENDIENTE: "SLOPE",
+  "PRONOSTICO": "FORECAST",
+  "PRONOSTICO.LINEAL": "FORECAST.LINEAR",
+  "JERARQUIA": "RANK",
+  "JERARQUIA.EQV": "RANK.EQ",
+  "MODA": "MODE",
+  "MODA.UNO": "MODE.SNGL",
   "INTERSECCION.EJE": "INTERCEPT",
-  "COEF.DE.CORREL": "CORREL",
-  "DISTR.NORM.N": "NORM.DIST",
-  "INV.NORM": "NORM.INV",
-  "DISTR.NORM.ESTAND.N": "NORM.S.DIST",
-  "INV.NORM.ESTAND": "NORM.S.INV",
-  ALEATORIO: "RAND",
-  "ALEATORIO.ENTRE": "RANDBETWEEN",
-  VERDADERO: "TRUE",
-  FALSO: "FALSE",
-  "ORS.UNIFORME": "ORS.UNIFORM",
-  "ORS.TIRM": "ORS.MIRR",
-  "ORS.RECUPERACION": "ORS.PAYBACK",
-  "ORS.RECUPERACIONDESC": "ORS.DPAYBACK",
-  "ORS.IR": "ORS.PI",
+  "TENDENCIA": "TREND",
+  "CRECIMIENTO": "GROWTH",
+  "ESTIMACION.LINEAL": "LINEST",
+  "PROMEDIO.SI.CONJUNTO": "AVERAGEIFS",
+  "DVS": "VDB",
+  CONCAT: "CONCAT",
+  "NORMALIZACIÓN": "STANDARDIZE",
 };
 
-/** Translate function names (identifiers immediately followed by "(") outside string literals. */
-export function translateFormulaToEnglish(formula: string): string {
+let EN_SET: Set<string> | null = null;
+let ES_TO_EN: Map<string, string> | null = null;
+let EN_TO_ES: Map<string, string> | null = null;
+
+function tables() {
+  if (!EN_SET || !ES_TO_EN || !EN_TO_ES) {
+    EN_SET = new Set(registeredFunctionNames());
+    EN_TO_ES = new Map();
+    ES_TO_EN = new Map();
+    for (const [en, es] of Object.entries(HF_FUNCTION_NAMES_ES)) {
+      EN_TO_ES.set(en, es);
+      ES_TO_EN.set(es.toUpperCase(), en);
+    }
+    for (const [es, en] of Object.entries(ES_ALIASES)) ES_TO_EN.set(es, en);
+    // the catalog (official Excel names) wins over the fallbacks
+    for (const f of FUNCTION_CATALOG) {
+      EN_TO_ES.set(f.en, f.es);
+      ES_TO_EN.set(f.es.toUpperCase(), f.en);
+    }
+  }
+  return { EN_SET, ES_TO_EN, EN_TO_ES };
+}
+
+/** Canonical (English) name of a function typed in English or Spanish, or null if unknown. */
+export function canonicalFunctionName(name: string): string | null {
+  const { EN_SET, ES_TO_EN } = tables();
+  const up = stripFnPrefix(name).toUpperCase();
+  if (EN_SET.has(up)) return up;
+  return ES_TO_EN.get(up) ?? null;
+}
+
+/** Localised name of a canonical (English) function name. */
+export function localFunctionName(en: string, locale: Locale): string {
+  const up = stripFnPrefix(en).toUpperCase();
+  if (locale === "en") return up;
+  return tables().EN_TO_ES.get(up) ?? up;
+}
+
+/** Every function the engine knows (canonical names). */
+export function engineFunctionNames(): string[] {
+  return [...tables().EN_SET];
+}
+
+/**
+ * What the user typed (UI locale) → engine syntax: English function names (Spanish ones and
+ * `_xlfn.` prefixes accepted), `,` separators, `.` decimals, TRUE/FALSE and English error values.
+ */
+export function toEngineFormula(text: string, locale: Locale): string {
+  if (!text.startsWith("=")) return text;
+  const { EN_SET, ES_TO_EN } = tables();
   let out = "";
-  let i = 0;
-  while (i < formula.length) {
-    const ch = formula[i];
-    if (ch === '"') {
-      const end = formula.indexOf('"', i + 1);
-      const stop = end < 0 ? formula.length : end + 1;
-      out += formula.slice(i, stop);
-      i = stop;
-      continue;
+  for (const t of tokenize(text, locale)) {
+    switch (t.type) {
+      case "func": {
+        const name = stripFnPrefix(t.text);
+        const up = name.toUpperCase();
+        out += EN_SET.has(up) ? name : (ES_TO_EN.get(up) ?? name);
+        break;
+      }
+      case "sep":
+        out += ",";
+        break;
+      case "number":
+        out += t.text.replace(",", ".");
+        break;
+      case "bool": {
+        const up = t.text.toUpperCase();
+        out += up === "VERDADERO" ? "TRUE" : up === "FALSO" ? "FALSE" : t.text;
+        break;
+      }
+      case "error":
+        out += ERR_ES_TO_EN[t.text.toUpperCase()] ?? t.text;
+        break;
+      default:
+        out += t.text;
     }
-    const m = /^[A-Za-zÁÉÍÓÚÑáéíóúñ_][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ_.]*/.exec(formula.slice(i));
-    if (m) {
-      const word = m[0];
-      const next = formula[i + word.length];
-      const prev = i > 0 ? formula[i - 1] : "";
-      const isFn = next === "(" && prev !== "!" && prev !== "'";
-      const mapped = isFn ? ES_TO_EN[word.toUpperCase()] : undefined;
-      out += mapped ?? word;
-      i += word.length;
-      continue;
-    }
-    out += ch;
-    i++;
   }
   return out;
+}
+
+/** Engine formula → UI locale (Spanish names, `;` separators and decimal commas in es). */
+export function toDisplayFormula(formula: string, locale: Locale): string {
+  if (!formula.startsWith("=")) return formula;
+  const { EN_TO_ES } = tables();
+  let out = "";
+  for (const t of tokenize(formula, "en")) {
+    switch (t.type) {
+      case "func": {
+        const name = stripFnPrefix(t.text);
+        out += locale === "es" ? (EN_TO_ES.get(name.toUpperCase()) ?? name) : name;
+        break;
+      }
+      case "sep":
+        out += locale === "es" ? ";" : ",";
+        break;
+      case "number":
+        out += locale === "es" ? t.text.replace(".", ",") : t.text;
+        break;
+      case "bool": {
+        const up = t.text.toUpperCase();
+        out += locale === "es" ? (up === "TRUE" ? "VERDADERO" : up === "FALSE" ? "FALSO" : t.text) : t.text;
+        break;
+      }
+      case "error":
+        out += localizeError(t.text, locale);
+        break;
+      default:
+        out += t.text;
+    }
+  }
+  return out;
+}
+
+/** Translate Spanish function names (and `;`) to engine syntax. Kept for backwards compatibility. */
+export function translateFormulaToEnglish(formula: string): string {
+  return toEngineFormula(formula, "en");
 }

@@ -2,13 +2,23 @@
  * SpreadsheetEngine: thin wrapper around HyperFormula configured for Excel compatibility.
  */
 import { DetailedCellError, HyperFormula } from "hyperformula";
-import type { ConfigParams, ExportedChange, RawCellContent, SimpleCellAddress } from "hyperformula";
+import type { ConfigParams, ExportedChange, RawCellContent, SimpleCellAddress, SimpleCellRange } from "hyperformula";
 import type { CellRef, RiskModel } from "@openrisksim/core";
-import { parseA1, parseRange, toA1 } from "./address";
+import { parseA1, parseRange, quoteSheetName, toA1 } from "./address";
 import { registerOrsFunctions } from "./orsFunctions";
 import type { CellData, CellStyle, SheetData, WorkbookData } from "./types";
 
 export type EngineValue = number | string | boolean | null | { error: string };
+/** Raw cell content as stored/serialised by the engine ("=..." formulas, "'text" forced text, numbers, booleans). */
+export type RawContent = RawCellContent;
+/** Detailed error of a cell (HyperFormula error type + English message). */
+export interface CellErrorInfo {
+  /** "#DIV/0!", "#NAME?"… */
+  value: string;
+  /** HyperFormula ErrorType: DIV_BY_ZERO, NAME, VALUE, NUM, NA, CYCLE, REF, SPILL, LIC, ERROR. */
+  type: string;
+  message: string;
+}
 
 /** HyperFormula configuration used by every engine (Excel-compatible). */
 export const HF_CONFIG: Partial<ConfigParams> = {
@@ -258,6 +268,170 @@ export class SpreadsheetEngine {
     if (this.fileName !== undefined) wb.fileName = this.fileName;
     if (this.names) wb.names = { ...this.names };
     return wb;
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Formula editing helpers (fill, copy/paste, move, auditing, names)
+  // -------------------------------------------------------------------------------------------
+
+  /** HyperFormula range for "B2:D9" on a sheet. */
+  range(sheet: string, range: string): SimpleCellRange {
+    const { start, end } = parseRange(range);
+    const sid = this.sheetId(sheet);
+    return { start: { sheet: sid, row: start.row, col: start.col }, end: { sheet: sid, row: end.row, col: end.col } };
+  }
+
+  /** Raw contents of a range (formulas with "=", forced text with a leading apostrophe). */
+  getRangeSerialized(sheet: string, range: string): RawCellContent[][] {
+    return this.hf.getRangeSerialized(this.range(sheet, range));
+  }
+
+  /** Write raw contents (formulas, numbers, booleans, "'text") starting at `topLeft` (one undo step). */
+  setRangeRaw(sheet: string, topLeft: string, data: RawCellContent[][]): void {
+    if (!data.length) return;
+    const { row, col } = parseA1(topLeft);
+    const sid = this.sheetId(sheet);
+    this.hf.setCellContents({ sheet: sid, row, col }, data.map((r) => r.map((v) => (v === "" || v === undefined ? null : v))));
+    const m = this.meta.get(sid);
+    if (m) {
+      m.rows = Math.max(m.rows, row + data.length);
+      m.cols = Math.max(m.cols, col + Math.max(...data.map((r) => r.length)));
+    }
+  }
+
+  /**
+   * Contents to fill `target` from `source` (Excel fill handle / Ctrl+D): the source pattern is
+   * repeated and relative references are shifted; absolute (`$`) parts are kept.
+   */
+  fillData(sheet: string, source: string, target: string): RawCellContent[][] {
+    return this.hf.getFillRangeData(this.range(sheet, source), this.range(sheet, target), false);
+  }
+
+  /** Copy `source` and paste it at `target` (top-left), shifting relative references like Excel. */
+  copyPaste(srcSheet: string, source: string, dstSheet: string, target: string): void {
+    const { row, col } = parseA1(target);
+    this.hf.copy(this.range(srcSheet, source));
+    this.hf.paste({ sheet: this.sheetId(dstSheet), row, col });
+    this.hf.clearClipboard();
+  }
+
+  /** Move cells (cut + paste): formulas pointing at the moved cells follow them. Returns false when impossible. */
+  moveRange(srcSheet: string, source: string, dstSheet: string, target: string): boolean {
+    const { row, col } = parseA1(target);
+    const src = this.range(srcSheet, source);
+    const dst = { sheet: this.sheetId(dstSheet), row, col };
+    if (!this.hf.isItPossibleToMoveCells(src, dst)) return false;
+    this.hf.moveCells(src, dst);
+    return true;
+  }
+
+  /** Run several edits as a single undo step. */
+  batch(fn: () => void): void {
+    this.hf.batch(fn);
+  }
+
+  /** True when the formula ("=..." in English syntax) parses. */
+  validateFormula(formula: string): boolean {
+    try {
+      return this.hf.validateFormula(formula);
+    } catch {
+      return false;
+    }
+  }
+
+  /** Evaluate a formula ("=...") in the context of a sheet without writing it anywhere. */
+  calculate(formula: string, sheet: string): EngineValue | EngineValue[][] {
+    const v = this.hf.calculateFormula(formula, this.sheetId(sheet));
+    if (Array.isArray(v)) return v.map((r) => r.map(exportValue));
+    return exportValue(v);
+  }
+
+  /** Error details of a cell, or null when it does not hold an error. */
+  cellError(ref: CellRef): CellErrorInfo | null {
+    const v = this.hf.getCellValue(this.address(ref));
+    if (!(v instanceof DetailedCellError)) return null;
+    return { value: v.value, type: String(v.type), message: v.message ?? "" };
+  }
+
+  /** Direct precedents of a cell as "Sheet!A1" / "Sheet!A1:B9" (sheet names unquoted, before the last "!"). */
+  precedents(ref: CellRef): { sheet: string; range: string }[] {
+    return this.hf.getCellPrecedents(this.address(ref)).map((x) => this.describe(x));
+  }
+
+  /** Direct dependents (formula cells) of a cell or range; range nodes are resolved to the formulas using them. */
+  dependents(ref: CellRef | { sheet: string; range: string }): { sheet: string; range: string }[] {
+    const start: SimpleCellAddress | SimpleCellRange = "address" in ref ? this.address(ref) : this.range(ref.sheet, ref.range);
+    const out = new Map<string, { sheet: string; range: string }>();
+    const seen = new Set<string>();
+    const queue: (SimpleCellAddress | SimpleCellRange)[] = [start];
+    let guard = 0;
+    while (queue.length && guard++ < 5000) {
+      const node = queue.shift()!;
+      for (const d of this.hf.getCellDependents(node)) {
+        const key = JSON.stringify(d);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if ("start" in d) queue.push(d); // range vertex: look at what uses the range
+        else if (this.hf.doesCellHaveFormula(d)) {
+          const desc = this.describe(d);
+          out.set(`${desc.sheet}!${desc.range}`, desc);
+        }
+      }
+    }
+    return [...out.values()];
+  }
+
+  private describe(x: SimpleCellAddress | SimpleCellRange): { sheet: string; range: string } {
+    if ("start" in x) {
+      const a = toA1(x.start.row, x.start.col);
+      const b = toA1(x.end.row, x.end.col);
+      return { sheet: this.hf.getSheetName(x.start.sheet) ?? "", range: a === b ? a : `${a}:${b}` };
+    }
+    return { sheet: this.hf.getSheetName(x.sheet) ?? "", range: toA1(x.row, x.col) };
+  }
+
+  /** Workbook-level defined names with their formula ("=Sheet1!$B$2"). */
+  listNames(): { name: string; formula: string }[] {
+    return this.hf.listNamedExpressions().map((name) => ({ name, formula: this.hf.getNamedExpressionFormula(name) ?? "" }));
+  }
+
+  /**
+   * Add or change a defined name. `expression` is a formula ("=Hoja1!$B$2") or reference
+   * ("Hoja1!$B$2"). Throws when the name or expression is not valid.
+   */
+  setName(name: string, expression: string): void {
+    const expr = expression.startsWith("=") ? expression : `=${expression}`;
+    const existing = this.hf.listNamedExpressions().find((n) => n.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      if (existing !== name) {
+        this.hf.removeNamedExpression(existing);
+        this.hf.addNamedExpression(name, expr);
+      } else this.hf.changeNamedExpression(name, expr);
+    } else {
+      if (!this.hf.isItPossibleToAddNamedExpression(name, expr)) throw new Error(`Invalid name: ${name}`);
+      this.hf.addNamedExpression(name, expr);
+    }
+    const names = { ...(this.names ?? {}) };
+    if (existing) delete names[existing];
+    names[name] = expr.slice(1);
+    this.names = names;
+  }
+
+  /** Remove a defined name (no-op when missing). */
+  removeName(name: string): void {
+    const existing = this.hf.listNamedExpressions().find((n) => n.toLowerCase() === name.toLowerCase());
+    if (!existing) return;
+    this.hf.removeNamedExpression(existing);
+    if (this.names) {
+      const names = { ...this.names };
+      delete names[existing];
+      this.names = names;
+    }
+  }
+
+  /** Quote a sheet name for formulas when needed ("'Hoja 1'"). */
+  static quoteSheet(name: string): string {
+    return quoteSheetName(name);
   }
 
   // -------------------------------------------------------------------------------------------

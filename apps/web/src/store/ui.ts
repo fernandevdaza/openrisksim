@@ -4,7 +4,7 @@ import i18n, { detectLocale, persistLocale, type Locale } from "../i18n";
 import { COMPACT_QUERY, matches } from "../lib/responsive";
 
 export type Theme = "light" | "dark";
-export type RibbonTabId = "file" | "simulation" | "analysis" | "forecast" | "optimization" | "finance" | "help";
+export type RibbonTabId = "file" | "formulas" | "simulation" | "analysis" | "forecast" | "optimization" | "finance" | "help";
 export type HelpTab = "quickstart" | "glossary" | "shortcuts" | "about";
 
 export type DialogState =
@@ -16,6 +16,9 @@ export type DialogState =
   | { type: "examples" }
   | { type: "report" }
   | { type: "help"; tab: HelpTab }
+  | { type: "insertFunction"; fn?: string }
+  | { type: "evaluateFormula"; cell: CellRef }
+  | { type: "names" }
   | { type: "confirm"; title: string; message: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void };
 
 export type ClipboardDef =
@@ -67,6 +70,17 @@ export interface UiState {
   rangePick: { onDone: (range: string | null) => void } | null;
   startRangePick(onDone: (range: string | null) => void): void;
   finishRangePick(range: string | null): void;
+
+  /** Ask the grid to move the active cell (after committing an edit). */
+  moveRequest: { dr: number; dc: number; nonce: number } | null;
+  requestMove(dr: number, dc: number): void;
+
+  /** Grid shows formulas instead of values (Ctrl+`). */
+  showFormulas: boolean;
+  setShowFormulas(v: boolean): void;
+  /** Multi-line formula bar (Ctrl+Shift+U). */
+  formulaBarExpanded: boolean;
+  setFormulaBarExpanded(v: boolean): void;
 
   toasts: Toast[];
   notify(message: string, kind?: Toast["kind"]): void;
@@ -171,6 +185,14 @@ export const useUiStore = create<UiState>()((set, get) => ({
     set({ rangePick: null });
     rp?.onDone(range);
   },
+
+  moveRequest: null,
+  requestMove: (dr, dc) => set({ moveRequest: { dr, dc, nonce: Date.now() + Math.random() } }),
+
+  showFormulas: false,
+  setShowFormulas: (v) => set({ showFormulas: v }),
+  formulaBarExpanded: false,
+  setFormulaBarExpanded: (v) => set({ formulaBarExpanded: v }),
 
   toasts: [],
   notify: (message, kind = "info") => {

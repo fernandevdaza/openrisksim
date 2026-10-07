@@ -64,7 +64,8 @@ body.ors-picking .ors-modal {
 @media (max-width: 767px), (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select,
-  textarea {
+  textarea,
+  .ors-formula-hl {
     font-size: 16px;
   }
 }
@@ -119,4 +120,14 @@ body.ors-picking .ors-modal {
   #root {
     display: none;
   }
+}
+
+/* copy / cut marquee ("marching ants") */
+@keyframes ors-ants {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+.ors-ants {
+  animation: ors-ants 0.6s linear infinite;
 }

@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkbookStore } from "../store/workbook";
 import { useUiStore } from "../store/ui";
-import { commitEdit, rawCellContent, useEditStore } from "./editState";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { clsx } from "../components/ui";
+import { rawCellContent } from "./editState";
+import { FormulaInput } from "./FormulaInput";
+import { openInsertFunction } from "./formulaActions";
 import { parseRangeBounds, splitSheetRef } from "../lib/a1";
 import { isCoarsePointer } from "../lib/responsive";
 
@@ -14,13 +18,12 @@ export function FormulaBar() {
   const cursor = useWorkbookStore((s) => s.cursor);
   const version = useWorkbookStore((s) => s.version);
   const engine = useWorkbookStore((s) => s.engine);
-  const editing = useEditStore((s) => s.editing);
   const [nameText, setNameText] = useState<string | null>(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const raw = engine && sheet ? rawCellContent({ sheet, address: cursor }) : "";
   void version;
-  const shown = editing && editing.sheet === sheet && editing.address === cursor ? editing.text : raw;
+  const expanded = useUiStore((s) => s.formulaBarExpanded);
 
   useEffect(() => setNameText(null), [selection.range, sheet]);
 
@@ -44,10 +47,10 @@ export function FormulaBar() {
   };
 
   return (
-    <div className="flex h-8 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900 max-md:h-11 max-md:gap-1.5 max-md:px-1.5">
+    <div className="flex min-h-8 shrink-0 items-start gap-2 py-1 border-b border-slate-200 bg-white px-2 dark:border-slate-700 dark:bg-slate-900 max-md:h-11 max-md:gap-1.5 max-md:px-1.5">
       <input
         aria-label={t("grid.nameBox")}
-        className="h-6 w-28 rounded border max-md:h-8 max-md:w-16 max-md:px-1 max-md:text-center border-slate-300 bg-white px-1.5 text-[12px] tabular-nums text-slate-800 focus:border-blue-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        className="h-6 w-28 shrink-0 rounded border max-md:h-8 max-md:w-16 max-md:px-1 max-md:text-center border-slate-300 bg-white px-1.5 text-[12px] tabular-nums text-slate-800 focus:border-blue-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         value={nameText ?? selection.range}
         onChange={(e) => setNameText(e.target.value)}
         onFocus={(e) => e.target.select()}
@@ -62,40 +65,41 @@ export function FormulaBar() {
         }}
         onBlur={() => setNameText(null)}
       />
-      <span className="select-none font-serif text-sm italic text-slate-500 max-md:text-xs">fx</span>
-      <input
-        data-formula-input
-        aria-label={t("grid.formulaBar")}
-        className="h-6 min-w-0 flex-1 rounded border max-md:h-8 border-slate-300 bg-white px-2 font-mono text-[12px] text-slate-900 focus:border-blue-600 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-        value={shown}
+      <button
+        type="button"
+        data-keep-edit
+        title={t("formula.insertFunction")}
+        aria-label={t("formula.insertFunction")}
         disabled={!engine}
-        onFocus={() => {
-          const ed = useEditStore.getState().editing;
-          if (!ed) useEditStore.getState().start({ sheet, address: cursor, text: raw, mode: "edit", source: "bar" });
-          else if (ed.source !== "bar") useEditStore.setState({ editing: { ...ed, source: "bar", mode: "edit" } });
-        }}
-        onChange={(e) => {
-          const ed = useEditStore.getState().editing;
-          if (!ed) useEditStore.getState().start({ sheet, address: cursor, text: e.target.value, mode: "edit", source: "bar" });
-          else useEditStore.getState().setText(e.target.value);
-        }}
-        onBlur={(e) => {
-          const next = e.relatedTarget as HTMLElement | null;
-          if (next?.closest("[data-cell-editor]")) return;
-          commitEdit();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commitEdit();
-            focusGrid();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            useEditStore.getState().cancel();
-            focusGrid();
-          }
-        }}
+        className="shrink-0 rounded px-1 font-serif text-sm italic text-slate-600 hover:bg-blue-100 hover:text-blue-800 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700 max-md:text-xs"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => openInsertFunction()}
+      >
+        fx
+      </button>
+      <FormulaInput
+        variant="bar"
+        ariaLabel={t("grid.formulaBar")}
+        idleText={raw}
+        disabled={!engine}
+        wrap={expanded}
+        typo="px-2 py-[3px] font-mono text-[12px] leading-[17px] max-md:py-[7px]"
+        className={clsx(
+          "min-w-0 flex-1 self-start rounded border border-slate-300 bg-white focus-within:border-blue-600 dark:border-slate-600 dark:bg-slate-800",
+          expanded ? "h-[94px]" : "h-6 max-md:h-8",
+        )}
       />
+      <button
+        type="button"
+        className="shrink-0 self-start rounded p-0.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 max-md:hidden"
+        title={t("formula.expandBar")}
+        aria-label={t("formula.expandBar")}
+        aria-expanded={expanded}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => useUiStore.getState().setFormulaBarExpanded(!expanded)}
+      >
+        {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+      </button>
     </div>
   );
 }

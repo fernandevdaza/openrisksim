@@ -7,7 +7,8 @@ export { readXlsx, writeXlsx, stripExcelPrefixes, addExcelPrefixes } from "./xls
 export { readCsv, detectDecimalSeparator, detectDelimiter, parseLocaleNumber } from "./csv";
 
 export { SpreadsheetEngine, HF_CONFIG } from "./engine";
-export type { EngineValue } from "./engine";
+export type { EngineValue, RawContent, CellErrorInfo } from "./engine";
+export { HF_FUNCTION_NAMES_ES, registeredFunctionNames } from "./functionNames";
 export { OrsPlugin, registerOrsFunctions, ORS_FUNCTION_HELP, ORS_FUNCTION_NAMES_ES } from "./orsFunctions";
 
 export { createWorkbookEvaluator } from "./evaluator";

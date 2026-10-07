@@ -10,6 +10,7 @@ import { actions } from "../actions";
 import { BackendBadge } from "./BackendBadge";
 import { useIsMobile } from "../lib/responsive";
 import { clsx } from "../components/ui";
+import { editModeOf, useEditStore } from "../grid/editState";
 
 function SelectionSummary() {
   const { t } = useTranslation();
@@ -54,6 +55,18 @@ function SelectionSummary() {
   );
 }
 
+/** Excel-like edit mode: Listo / Introducir / Señalar / Modificar. */
+function EditModeIndicator() {
+  const { t } = useTranslation();
+  const mode = useEditStore((s) => editModeOf(s.editing));
+  const key = { ready: "modeReady", enter: "modeEnter", point: "modePoint", edit: "modeEdit" }[mode];
+  return (
+    <span data-edit-mode={mode} className={clsx("min-w-[68px] shrink-0", mode !== "ready" && "font-semibold text-blue-800 dark:text-blue-300")}>
+      {t(`formula.${key}`)}
+    </span>
+  );
+}
+
 /** Bottom bar: simulation progress / run summary / step mode / selection stats. */
 export function StatusBar() {
   const { t } = useTranslation();
@@ -84,6 +97,7 @@ export function StatusBar() {
       role="status"
       aria-live="polite"
     >
+      {!mobile && <EditModeIndicator />}
       {status === "running" ? (
         <div className="flex items-center gap-2">
           <LoaderCircle size={13} className="animate-spin text-blue-700" />
@@ -144,9 +158,9 @@ export function StatusBar() {
             </span>
           )}
         </div>
-      ) : (
+      ) : mobile ? (
         <span>{t("status.ready")}</span>
-      )}
+      ) : null}
       {errorText && status !== "running" && (
         <span className="flex items-center gap-1 rounded bg-red-50 px-2 py-0.5 text-red-700 dark:bg-red-900/30 dark:text-red-300" role="alert">
           <CircleAlert size={12} /> {errorText}

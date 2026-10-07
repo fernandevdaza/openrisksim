@@ -30,7 +30,8 @@
     "gModel": "Model",
     "gRun": "Run",
     "gDefinitions": "Definitions",
-    "gWindows": "Windows"
+    "gWindows": "Windows",
+    "formulas": "Formulas"
   },
   "file": {
     "open": "Open",
@@ -299,7 +300,9 @@
     "sheets": "Sheets",
     "addSheet": "Add sheet",
     "sheetBase": "Sheet",
-    "clearContents": "Clear contents"
+    "clearContents": "Clear contents",
+    "cellEditor": "Cell editor",
+    "errorBadge": "Error in cell: {{error}}"
   },
   "range": {
     "label": "Range",
@@ -373,7 +376,7 @@
     "kCommit": "Commit and move down / right",
     "kExtend": "Extend the selection",
     "kJump": "Jump to the data edge",
-    "kCopyPaste": "Copy / paste values (Excel compatible)",
+    "kCopyPaste": "Copy / cut / paste (formulas adjust their references)",
     "kUndo": "Undo / redo",
     "kDelete": "Clear the selection contents",
     "aboutText": "OpenRiskSim is a free and open-source alternative to Risk Simulator for Monte Carlo simulation, forecasting, optimization and project financial evaluation, designed for project-evaluation students.",
@@ -381,7 +384,12 @@
     "license": "Licence",
     "contributors": "the OpenRiskSim contributors",
     "gpl": "This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License (GPL) version 3 or later, as published by the Free Software Foundation. It comes WITHOUT ANY WARRANTY.",
-    "credits": "Uses HyperFormula (GPLv3), ExcelJS, ECharts, React, i18next and lucide."
+    "credits": "Uses HyperFormula (GPLv3), ExcelJS, ECharts, React, i18next and lucide.",
+    "kAbsolute": "Toggle relative/absolute reference ($A$1) while editing",
+    "kFill": "Fill down / right",
+    "kFillSelection": "Enter the formula in every selected cell",
+    "kNewLine": "Line break inside the cell",
+    "kExpandBar": "Expand the formula bar"
   },
   "accel": {
     "title": "Acceleration",
@@ -425,5 +433,59 @@
     "validated": "Validated against the sheet: {{n}} values, max. relative error {{err}}",
     "requested": "Requested mode: {{mode}}",
     "backendLabel": "Backend"
+  },
+  "formula": {
+    "syntaxError": "There's a problem with this formula. Check the parentheses, separators (,) and function names. To type text that starts with =, put an apostrophe (') in front.",
+    "insertFunction": "Insert function",
+    "expandBar": "Expand or collapse the formula bar (Ctrl+Shift+U)",
+    "noFormula": "Cell {{cell}} does not contain a formula.",
+    "noPrecedents": "There are no (more) precedent cells.",
+    "noDependents": "There are no (more) dependent cells.",
+    "modeReady": "Ready",
+    "modeEnter": "Enter",
+    "modePoint": "Point",
+    "modeEdit": "Edit",
+    "searchFunction": "Search for a function",
+    "searchHint": "Type a brief description or the function name…",
+    "category": "Category",
+    "allCategories": "All",
+    "recent": "Most used",
+    "selectFunction": "Select a function",
+    "noMatches": "No functions found.",
+    "arguments": "Function arguments",
+    "back": "Back",
+    "result": "Formula result",
+    "pickArg": "Select on the sheet",
+    "addArg": "Add argument",
+    "autoSum": "AutoSum",
+    "autoSumHint": "Quick sum of the cells above or to the left (Alt+=)",
+    "showFormulas": "Show formulas",
+    "showFormulasHint": "Show formulas instead of their results (Ctrl+`)",
+    "tracePrecedents": "Trace precedents",
+    "traceDependents": "Trace dependents",
+    "removeArrows": "Remove arrows",
+    "evaluate": "Evaluate formula",
+    "evaluateStep": "Evaluate",
+    "restart": "Restart",
+    "evaluateHint": "Each click on Evaluate replaces the next part of the formula with its value.",
+    "names": "Defined names",
+    "namesHint": "A name identifies a cell, range or constant and can be used in formulas (e.g. =NPV(Rate,C5:G5)).",
+    "newName": "New name",
+    "refersTo": "Refers to",
+    "value": "Value",
+    "noNames": "There are no defined names.",
+    "badName": "Invalid name: it must start with a letter, have no spaces and not look like a cell (e.g. A1).",
+    "badRefersTo": "The reference or formula is not valid.",
+    "nameSaved": "Name “{{name}}” saved.",
+    "gLibrary": "Function library",
+    "gNames": "Defined names",
+    "gAudit": "Formula auditing",
+    "cellFormula": "Formula of {{cell}}"
+  },
+  "clipboard": {
+    "cannotMove": "Those cells cannot be moved there.",
+    "pasteValues": "Paste values",
+    "definitionsMoved_one": "1 model definition moved with the cells.",
+    "definitionsMoved_other": "{{count}} model definitions moved with the cells."
   }
 }

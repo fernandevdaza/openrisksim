@@ -30,7 +30,8 @@
     "gModel": "Modelo",
     "gRun": "Ejecutar",
     "gDefinitions": "Definiciones",
-    "gWindows": "Ventanas"
+    "gWindows": "Ventanas",
+    "formulas": "Fórmulas"
   },
   "file": {
     "open": "Abrir",
@@ -299,7 +300,9 @@
     "sheets": "Hojas",
     "addSheet": "Agregar hoja",
     "sheetBase": "Hoja",
-    "clearContents": "Borrar contenido"
+    "clearContents": "Borrar contenido",
+    "cellEditor": "Editor de celda",
+    "errorBadge": "Error en la celda: {{error}}"
   },
   "range": {
     "label": "Rango",
@@ -373,7 +376,7 @@
     "kCommit": "Confirmar y moverse abajo / a la derecha",
     "kExtend": "Extender la selección",
     "kJump": "Saltar al borde de los datos",
-    "kCopyPaste": "Copiar / pegar valores (compatible con Excel)",
+    "kCopyPaste": "Copiar / cortar / pegar (las fórmulas ajustan sus referencias)",
     "kUndo": "Deshacer / rehacer",
     "kDelete": "Borrar el contenido de la selección",
     "aboutText": "OpenRiskSim es una alternativa libre y gratuita a Risk Simulator para simulación Monte Carlo, pronósticos, optimización y evaluación financiera de proyectos, pensada para estudiantes de Preparación y Evaluación de Proyectos.",
@@ -381,7 +384,12 @@
     "license": "Licencia",
     "contributors": "los colaboradores de OpenRiskSim",
     "gpl": "Este programa es software libre: puede redistribuirlo y/o modificarlo bajo los términos de la Licencia Pública General GNU (GPL) versión 3 o posterior, publicada por la Free Software Foundation. Se distribuye SIN NINGUNA GARANTÍA.",
-    "credits": "Usa HyperFormula (GPLv3), ExcelJS, ECharts, React, i18next y lucide."
+    "credits": "Usa HyperFormula (GPLv3), ExcelJS, ECharts, React, i18next y lucide.",
+    "kAbsolute": "Cambiar referencia relativa/absoluta ($A$1) al editar",
+    "kFill": "Rellenar hacia abajo / a la derecha",
+    "kFillSelection": "Escribir la fórmula en todas las celdas seleccionadas",
+    "kNewLine": "Salto de línea dentro de la celda",
+    "kExpandBar": "Expandir la barra de fórmulas"
   },
   "accel": {
     "title": "Aceleración",
@@ -425,5 +433,59 @@
     "validated": "Validado contra la hoja: {{n}} valores, error relativo máx. {{err}}",
     "requested": "Modo solicitado: {{mode}}",
     "backendLabel": "Motor"
+  },
+  "formula": {
+    "syntaxError": "Hay un problema con esta fórmula. Revise los paréntesis, los separadores (;) y los nombres de las funciones. Para escribir un texto que empiece con =, antepóngale un apóstrofo (').",
+    "insertFunction": "Insertar función",
+    "expandBar": "Expandir o contraer la barra de fórmulas (Ctrl+Mayús+U)",
+    "noFormula": "La celda {{cell}} no contiene una fórmula.",
+    "noPrecedents": "No hay (más) celdas precedentes.",
+    "noDependents": "No hay (más) celdas dependientes.",
+    "modeReady": "Listo",
+    "modeEnter": "Introducir",
+    "modePoint": "Señalar",
+    "modeEdit": "Modificar",
+    "searchFunction": "Buscar una función",
+    "searchHint": "Escriba una breve descripción o el nombre de la función…",
+    "category": "Categoría",
+    "allCategories": "Todas",
+    "recent": "Más usadas",
+    "selectFunction": "Seleccionar una función",
+    "noMatches": "No se encontraron funciones.",
+    "arguments": "Argumentos de función",
+    "back": "Atrás",
+    "result": "Resultado de la fórmula",
+    "pickArg": "Seleccionar en la hoja",
+    "addArg": "Agregar argumento",
+    "autoSum": "Autosuma",
+    "autoSumHint": "Suma rápida de las celdas de arriba o de la izquierda (Alt+=)",
+    "showFormulas": "Mostrar fórmulas",
+    "showFormulasHint": "Muestra las fórmulas en lugar de los resultados (Ctrl+`)",
+    "tracePrecedents": "Rastrear precedentes",
+    "traceDependents": "Rastrear dependientes",
+    "removeArrows": "Quitar flechas",
+    "evaluate": "Evaluar fórmula",
+    "evaluateStep": "Evaluar",
+    "restart": "Reiniciar",
+    "evaluateHint": "Cada clic en Evaluar reemplaza la siguiente parte de la fórmula por su valor.",
+    "names": "Nombres definidos",
+    "namesHint": "Un nombre identifica una celda, un rango o una constante y puede usarse en las fórmulas (p. ej. =VNA(Tasa;C5:G5)).",
+    "newName": "Nuevo nombre",
+    "refersTo": "Se refiere a",
+    "value": "Valor",
+    "noNames": "No hay nombres definidos.",
+    "badName": "Nombre no válido: debe empezar con una letra, sin espacios, y no puede parecer una celda (p. ej. A1).",
+    "badRefersTo": "La referencia o fórmula no es válida.",
+    "nameSaved": "Nombre «{{name}}» guardado.",
+    "gLibrary": "Biblioteca de funciones",
+    "gNames": "Nombres definidos",
+    "gAudit": "Auditoría de fórmulas",
+    "cellFormula": "Fórmula de {{cell}}"
+  },
+  "clipboard": {
+    "cannotMove": "No se pueden mover esas celdas a ese destino.",
+    "pasteValues": "Pegar valores",
+    "definitionsMoved_one": "1 definición del modelo se movió con las celdas.",
+    "definitionsMoved_other": "{{count}} definiciones del modelo se movieron con las celdas."
   }
 }

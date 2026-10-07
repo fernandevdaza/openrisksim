@@ -2,6 +2,13 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowRightFromLine,
+  ArrowRightToLine,
+  Braces,
+  ListChecks,
+  Sigma,
+  SquareFunction,
+  Tags,
   BookA,
   BookOpen,
   ClipboardPaste,
@@ -40,6 +47,9 @@ import { useModelStore } from "../store/model";
 import { actions } from "../actions";
 import { TOOLS } from "../tools/registry";
 import { tr } from "../lib/modelText";
+import { clearTraces, openEvaluateFormula, openInsertFunction, openNames, toggleShowFormulas, trace, useTraceStore } from "../grid/formulaActions";
+import { autoSum } from "../grid/sheetOps";
+import { commitEdit } from "../grid/editState";
 
 const DOCS_URL = "https://fernandevdaza.github.io/openrisksim/docs/";
 const REPO_URL = "https://github.com/fernandevdaza/openrisksim";
@@ -47,7 +57,7 @@ function openExternal(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-const TABS: RibbonTabId[] = ["file", "simulation", "analysis", "forecast", "optimization", "finance", "help"];
+const TABS: RibbonTabId[] = ["file", "formulas", "simulation", "analysis", "forecast", "optimization", "finance", "help"];
 
 export function RibbonButton({
   icon: Icon,
@@ -72,6 +82,8 @@ export function RibbonButton({
     <button
       type="button"
       onClick={onClick}
+      // do not steal the focus from a formula being edited
+      onMouseDown={(e) => e.preventDefault()}
       disabled={disabled}
       title={title ?? label}
       aria-label={label}
@@ -138,6 +150,7 @@ export function Ribbon() {
               onClick={() => setTab(id)}
               className={clsx(
                 "shrink-0 snap-start whitespace-nowrap rounded-t px-3 py-1 text-[12.5px] max-md:px-2.5 max-md:py-2 max-md:text-[13px]",
+                id === "formulas" && "max-md:hidden",
                 tab === id ? "bg-slate-50 font-semibold text-[#1f3864] dark:bg-slate-900 dark:text-blue-200" : "text-blue-50 hover:bg-white/15",
               )}
             >
@@ -156,6 +169,7 @@ export function Ribbon() {
         aria-label={t(`ribbon.${tab}`)}
       >
         {tab === "file" && <FileTab />}
+        {tab === "formulas" && <FormulasTab />}
         {tab === "simulation" && <SimulationTab />}
         {(tab === "analysis" || tab === "forecast" || tab === "optimization" || tab === "finance") && <ToolsTab tab={tab} />}
         {tab === "help" && <HelpTab />}
@@ -184,6 +198,35 @@ function FileTab() {
       <Group label={t("ribbon.gView")}>
         <RibbonButton icon={Languages} label={locale === "es" ? "English" : "Español"} onClick={actions.toggleLanguage} title={t("file.language")} />
         <RibbonButton icon={theme === "dark" ? Sun : Moon} label={theme === "dark" ? t("file.lightTheme") : t("file.darkTheme")} onClick={actions.toggleTheme} />
+      </Group>
+    </>
+  );
+}
+
+function FormulasTab() {
+  const { t } = useTranslation();
+  const hasEngine = useWorkbookStore((s) => !!s.engine);
+  const showFormulas = useUiStore((s) => s.showFormulas);
+  const traced = useTraceStore((s) => s.edges.length > 0);
+  return (
+    <>
+      <Group label={t("formula.gLibrary")}>
+        <RibbonButton icon={SquareFunction} label={t("formula.insertFunction")} onClick={() => openInsertFunction()} disabled={!hasEngine} title={`${t("formula.insertFunction")} (Shift+F3)`} />
+        <RibbonButton icon={Sigma} label={t("formula.autoSum")} onClick={() => commitEdit() && autoSum()} disabled={!hasEngine} title={t("formula.autoSumHint")} />
+      </Group>
+      <Group label={t("formula.gNames")}>
+        <RibbonButton icon={Tags} label={t("formula.names")} onClick={openNames} disabled={!hasEngine} />
+      </Group>
+      <Group label={t("formula.gAudit")}>
+        <SmallStack>
+          <RibbonButton big={false} icon={ArrowRightToLine} label={t("formula.tracePrecedents")} onClick={() => trace("prec")} disabled={!hasEngine} />
+          <RibbonButton big={false} icon={ArrowRightFromLine} label={t("formula.traceDependents")} onClick={() => trace("dep")} disabled={!hasEngine} />
+          <RibbonButton big={false} icon={Eraser} label={t("formula.removeArrows")} onClick={clearTraces} disabled={!traced} />
+        </SmallStack>
+        <SmallStack>
+          <RibbonButton big={false} icon={Braces} label={t("formula.showFormulas")} onClick={toggleShowFormulas} active={showFormulas} title={t("formula.showFormulasHint")} />
+          <RibbonButton big={false} icon={ListChecks} label={t("formula.evaluate")} onClick={openEvaluateFormula} disabled={!hasEngine} />
+        </SmallStack>
       </Group>
     </>
   );

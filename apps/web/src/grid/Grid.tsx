@@ -4,12 +4,19 @@ import { clsx } from "../components/ui";
 import { useWorkbookStore, displayDims } from "../store/workbook";
 import { definitionIndex, useModelStore, type DefinitionKind } from "../store/model";
 import { useUiStore } from "../store/ui";
-import { boundsToRange, colLetters, inBounds, normalise, parseAddress, parseRangeBounds, parseTsv, toAddress, toTsv, type RangeBounds } from "../lib/a1";
+import { boundsToRange, colLetters, inBounds, normalise, parseAddress, parseRangeBounds, parseTsv, toAddress, type RangeBounds } from "../lib/a1";
 import { formatCellValue, formatGeneralFit, parseUserInput, separatorsFor } from "../lib/numberFormat";
 import { describeSpec } from "../lib/modelText";
+import { toDisplayFormula } from "../lib/formulaI18n";
+import { explainError, localizeError } from "../lib/errorInfo";
 import { readableOnTheme } from "../lib/color";
-import { commitEdit, normaliseFormula, rawCellContent, useEditStore } from "./editState";
+import { canPoint, commitEdit, normaliseFormula, pointTo, rawCellContent, useEditStore } from "./editState";
 import { CellContextMenu } from "./ContextMenu";
+import { FormulaInput } from "./FormulaInput";
+import { RefHighlights, type GridGeom } from "./RefHighlights";
+import { CopyMarquee, ErrorBadge, FillHandle, TraceArrows } from "./GridOverlays";
+import { autoSum, clearClipboardMarquee, copySelection, fillDownToAdjacent, fillRange, fillSelection, hasInternalClip, isInternalClipboard, pasteInternal } from "./sheetOps";
+import { clearTraces } from "./formulaActions";
 import { isCoarsePointer, touchedRecently } from "../lib/responsive";
 import type { AssumptionDef, DecisionVariableDef, ForecastDef } from "@openrisksim/core";
 
@@ -40,6 +47,7 @@ interface RenderCell {
   kinds?: DefinitionKind[];
   title?: string;
   overflow: boolean;
+  error?: boolean;
 }
 
 function upperBound(arr: number[], x: number): number {
@@ -68,6 +76,7 @@ export function Grid() {
   const jumpRequest = useUiStore((s) => s.jumpRequest);
   const editing = useEditStore((s) => s.editing);
   const picking = useUiStore((s) => s.rangePick !== null);
+  const showFormulas = useUiStore((s) => s.showFormulas);
 
   const meta = useMemo(() => workbook?.sheets.find((s) => s.name === sheet), [workbook, sheet]);
   const [extra, setExtra] = useState({ rows: 0, cols: 0 });
@@ -152,19 +161,34 @@ export function Grid() {
         const v = rowVals[c - firstCol];
         const cm = meta?.cells[addr];
         const defs = defIndex.get(`${sheet}!${addr}`);
-        if ((v === null || v === undefined || v === "") && !cm?.s?.bg && !defs) continue;
-        const f = formatCellValue(v, cm?.z, locale);
+        let formulaText: string | null = null;
+        if (showFormulas) {
+          try {
+            const fx = engine.getFormula({ sheet, address: addr });
+            if (fx) formulaText = toDisplayFormula(fx, locale);
+          } catch {
+            /* ignore */
+          }
+        }
+        if ((v === null || v === undefined || v === "") && !cm?.s?.bg && !defs && formulaText === null) continue;
+        const f = formulaText !== null ? { text: formulaText, align: "left" as const, color: undefined } : formatCellValue(v, cm?.z, locale);
+        let errTitle: string | undefined;
+        if (formulaText === null && v && typeof v === "object") {
+          f.text = localizeError(v.error, locale);
+          const info = engine.cellError({ sheet, address: addr });
+          errTitle = `${f.text}: ${explainError(info ?? { value: v.error }, locale)}`;
+        }
         const st = cm?.s;
         const w = colX[c + 1] - colX[c];
         let text = f.text;
         let overflowW = w;
         const align = st?.align ?? f.align;
-        if (typeof v === "number" && text.length * 7 + 6 > w && !(cm?.z ?? "").match(/[dmyhs]/i)) {
+        if (formulaText === null && typeof v === "number" && text.length * 7 + 6 > w && !(cm?.z ?? "").match(/[dmyhs]/i)) {
           const maxChars = Math.max(1, Math.floor((w - 6) / 7));
           text = !cm?.z || /^general$/i.test(cm.z) ? formatGeneralFit(v, separatorsFor(locale), maxChars) : "#".repeat(maxChars);
         }
         let overflow = false;
-        if (typeof v === "string" && align === "left" && text.length * 6.8 + 8 > w) {
+        if ((typeof v === "string" || formulaText !== null) && align === "left" && text.length * 6.8 + 8 > w) {
           let c2 = c + 1;
           while (c2 <= lastCol && overflowW < text.length * 6.8 + 8) {
             const nv = rowVals[c2 - firstCol];
@@ -186,7 +210,7 @@ export function Grid() {
           color: f.color ?? (st?.bg && !defs ? (st.color ?? "#0f172a") : readableOnTheme(st?.color, dark)),
           background: defs ? undefined : st?.bg,
         };
-        let title: string | undefined;
+        let title: string | undefined = errTitle;
         if (defs) {
           title = defs
             .map(({ kind, def }) => {
@@ -209,14 +233,15 @@ export function Grid() {
           style,
           className: defs ? DEF_CLASSES[defs[0].kind].cell : undefined,
           kinds: defs?.map((d) => d.kind),
-          title,
+          title: errTitle && title !== errTitle ? `${errTitle}\n${title}` : title,
           overflow,
+          error: !!errTitle,
         });
       }
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine, sheet, version, firstRow, lastRow, firstCol, lastVisCol, colX, meta, defIndex, locale, t, dark]);
+  }, [engine, sheet, version, firstRow, lastRow, firstCol, lastVisCol, colX, meta, defIndex, locale, t, dark, showFormulas]);
 
   // ---- selection helpers --------------------------------------------------------------------------
   const anchorRef = useRef<{ row: number; col: number }>({ row: 0, col: 0 });
@@ -313,14 +338,22 @@ export function Grid() {
     [engine, sheet, cursor],
   );
 
-  const finishEdit = useCallback(
-    (dr: number, dc: number) => {
-      commitEdit();
-      if (dr || dc) moveCursor(dr, dc, false);
-      focusGrid();
-    },
-    [moveCursor],
-  );
+  // trace arrows are removed when the workbook changes (Excel)
+  const editVersion = useWorkbookStore((s) => s.editVersion);
+  useEffect(() => clearTraces(), [editVersion, engine]);
+
+  // move the active cell after an edit was committed (Enter/Tab/arrows in the editor)
+  const moveRequest = useUiStore((s) => s.moveRequest);
+  useEffect(() => {
+    if (!moveRequest) return;
+    const p = parseAddress(useWorkbookStore.getState().cursor) ?? { row: 0, col: 0 };
+    const row = Math.max(0, Math.min(dims.rows - 1, p.row + moveRequest.dr));
+    const col = Math.max(0, Math.min(dims.cols - 1, p.col + moveRequest.dc));
+    select({ row, col }, { row, col });
+    ensureDims(row, col);
+    scrollIntoView(row, col);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moveRequest]);
 
   // ---- clipboard ----------------------------------------------------------------------------------
   const gridHasFocus = () => {
@@ -331,30 +364,19 @@ export function Grid() {
   useEffect(() => {
     const onCopy = (e: ClipboardEvent, cut = false) => {
       if (!gridHasFocus() || !engine) return;
-      const st = useWorkbookStore.getState();
-      const b = parseRangeBounds(st.selection.range);
-      if (!b) return;
-      const sep = separatorsFor(useUiStore.getState().locale);
-      const rows: string[][] = [];
-      for (let r = b.r0; r <= b.r1; r++) {
-        const row: string[] = [];
-        for (let c = b.c0; c <= b.c1; c++) {
-          const v = engine.getValue({ sheet: st.selection.sheet, address: toAddress(r, c) });
-          if (v === null || v === undefined) row.push("");
-          else if (typeof v === "object") row.push(v.error);
-          else if (typeof v === "number") row.push(String(v).replace(".", sep.decimal));
-          else row.push(String(v));
-        }
-        rows.push(row);
-      }
-      e.clipboardData?.setData("text/plain", toTsv(rows));
+      const tsv = copySelection(cut);
+      e.clipboardData?.setData("text/plain", tsv);
       e.preventDefault();
-      if (cut) st.clearRange(st.selection.sheet, st.selection.range);
     };
     const onCut = (e: ClipboardEvent) => onCopy(e, true);
     const onPaste = (e: ClipboardEvent) => {
       if (!gridHasFocus() || !engine) return;
       const text = e.clipboardData?.getData("text/plain");
+      if (hasInternalClip() && isInternalClipboard(text)) {
+        e.preventDefault();
+        pasteInternal(false);
+        return;
+      }
       if (text == null) return;
       e.preventDefault();
       pasteText(text);
@@ -399,7 +421,8 @@ export function Grid() {
 
   // ---- keyboard ----------------------------------------------------------------------------------
   const onKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
-    if (useEditStore.getState().editing) return;
+    const edNow = useEditStore.getState().editing;
+    if (edNow && !edNow.hold) return;
     const mod = e.ctrlKey || e.metaKey;
     const st = useWorkbookStore.getState();
     const pageRows = Math.max(1, Math.floor(view.h / ROW_H) - 1);
@@ -435,14 +458,31 @@ export function Grid() {
       case "F2":
         e.preventDefault();
         return startEdit(null, "edit");
+      case "Escape":
+        clearClipboardMarquee();
+        return;
       case "Delete":
       case "Backspace":
         e.preventDefault();
         st.clearRange(st.selection.sheet, st.selection.range);
         return;
     }
+    if (e.altKey && !mod && e.code === "Equal") {
+      e.preventDefault();
+      return autoSum();
+    }
     if (mod && !e.altKey) {
       const k = e.key.toLowerCase();
+      if ((e.code === "KeyD" || e.code === "KeyR") && !e.shiftKey) {
+        e.preventDefault();
+        return fillSelection(e.code === "KeyD" ? "down" : "right");
+      }
+      if (e.code === "KeyV" && e.shiftKey && hasInternalClip()) {
+        e.preventDefault();
+        pasteInternal(true);
+        return;
+      }
+
       if (k === "z" && !e.shiftKey) {
         e.preventDefault();
         st.undo();
@@ -494,8 +534,33 @@ export function Grid() {
     // ignore clicks on scrollbars
     const rect = el.getBoundingClientRect();
     if (e.clientX - rect.left > el.clientWidth || e.clientY - rect.top > el.clientHeight) return;
-    if (useEditStore.getState().editing) commitEdit();
     const pos = cellFromEvent(e.clientX, e.clientY);
+    const ed = useEditStore.getState().editing;
+    if (ed && e.button === 0 && canPoint()) {
+      // Point mode: clicking / dragging inserts a reference into the edited formula
+      e.preventDefault();
+      const anchor = e.shiftKey && ed.point && ed.point.sheet === sheet ? ed.point.anchor : pos;
+      pointTo(sheet, anchor, pos);
+      const onMovePt = (ev: MouseEvent) => {
+        const p = cellFromEvent(ev.clientX, ev.clientY);
+        const cur = useEditStore.getState().editing?.point;
+        if (cur && (p.row !== cur.focus.row || p.col !== cur.focus.col)) pointTo(sheet, cur.anchor, p);
+        const r = el.getBoundingClientRect();
+        if (ev.clientY > r.bottom - 10) el.scrollTop += ROW_H;
+        else if (ev.clientY < r.top + 10) el.scrollTop -= ROW_H;
+      };
+      const onUpPt = () => {
+        window.removeEventListener("mousemove", onMovePt);
+        window.removeEventListener("mouseup", onUpPt);
+      };
+      window.addEventListener("mousemove", onMovePt);
+      window.addEventListener("mouseup", onUpPt);
+      return;
+    }
+    if (ed && !ed.hold && !commitEdit()) {
+      e.preventDefault();
+      return;
+    }
     if (e.button === 2) {
       if (!inBounds(selBounds, pos.row, pos.col)) select(pos, pos);
       return;
@@ -656,6 +721,7 @@ export function Grid() {
     height: ROW_H,
   };
   const multi = selBounds.r1 > selBounds.r0 || selBounds.c1 > selBounds.c0;
+  const geom: GridGeom = { colX, rowH: ROW_H, rows: dims.rows, cols: dims.cols, view: { r0: firstRow, r1: lastRow, c0: firstCol, c1: lastVisCol }, cellFromEvent };
   const editPos = editing && editing.sheet === sheet ? parseAddress(editing.address) : null;
 
   const colHeaders = [];
@@ -770,18 +836,40 @@ export function Grid() {
               style={{ ...c.style, height: ROW_H - 1 }}
             >
               {c.text}
+              {c.error && <span className="absolute left-0 top-0 h-0 w-0 border-r-[6px] border-t-[6px] border-r-transparent border-t-emerald-600" />}
               {c.kinds && <span className={clsx("absolute right-0 top-0 h-0 w-0 border-l-[7px] border-t-[7px] border-l-transparent", DEF_CLASSES[c.kinds[0]].marker)} />}
             </div>
           ))}
           {/* selection */}
           {multi && <div className="pointer-events-none absolute z-[2] border border-blue-600 bg-blue-500/10" style={selRect} />}
           <div className="pointer-events-none absolute z-[3] border-2 border-blue-700 dark:border-blue-400" style={{ ...curRect, left: curRect.left - 1, top: curRect.top - 1, width: curRect.width + 1, height: curRect.height + 1 }} />
+          <CopyMarquee sheet={sheet} geom={geom} />
+          <TraceArrows sheet={sheet} geom={geom} />
+          {editing && <RefHighlights sheet={sheet} touch={isCoarsePointer()} geom={geom} />}
+          {!editing && !picking && !isCoarsePointer() && (
+            <FillHandle
+              sel={selBounds}
+              geom={geom}
+              onFill={(dir, count) => {
+                const res = fillRange(sheet, selBounds, dir, count, true);
+                if (res) {
+                  select({ row: res.r0, col: res.c0 }, { row: res.r1, col: res.c1 });
+                  ensureDims(res.r1, res.c1);
+                }
+                focusGrid();
+              }}
+              onAutoFill={() => {
+                fillDownToAdjacent();
+                focusGrid();
+              }}
+            />
+          )}
+          {!editing && <ErrorBadge sheet={sheet} cursor={cursorPos} geom={geom} />}
           {editPos && editing && (
             <CellEditor
               left={colX[editPos.col] ?? 0}
               top={editPos.row * ROW_H}
               minWidth={(colX[editPos.col + 1] ?? 0) - (colX[editPos.col] ?? 0)}
-              onFinish={finishEdit}
             />
           )}
         </div>
@@ -804,55 +892,19 @@ export function Grid() {
   );
 }
 
-function CellEditor({ left, top, minWidth, onFinish }: { left: number; top: number; minWidth: number; onFinish: (dr: number, dc: number) => void }) {
+function CellEditor({ left, top, minWidth }: { left: number; top: number; minWidth: number }) {
+  const { t } = useTranslation();
   const editing = useEditStore((s) => s.editing)!;
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (editing.source !== "cell") return;
-    const el = ref.current;
-    if (!el) return;
-    el.focus({ preventScroll: true });
-    const len = el.value.length;
-    el.setSelectionRange(len, len);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing.source, editing.address]);
-  const width = Math.max(minWidth, Math.min(600, editing.text.length * 7.2 + 16));
+  const lines = editing.text.split("\n");
+  const longest = lines.reduce((m, l) => Math.max(m, l.length), 0);
+  const width = Math.max(minWidth, Math.min(600, longest * 7.2 + 16));
   return (
-    <input
-      ref={ref}
-      data-cell-editor
-      aria-label="cell editor"
-      className="absolute z-[5] border-2 border-blue-700 bg-white px-[2px] text-[12.5px] text-slate-900 shadow-md outline-none dark:bg-slate-900 dark:text-slate-100"
-      style={{ left: left - 1, top: top - 1, width: width + 1, height: ROW_H + 1 }}
-      value={editing.text}
-      readOnly={editing.source !== "cell"}
-      onChange={(e) => useEditStore.getState().setText(e.target.value)}
-      onBlur={(e) => {
-        const next = e.relatedTarget as HTMLElement | null;
-        if (next?.closest("[data-formula-input]")) return;
-        if (useEditStore.getState().editing?.source === "cell") commitEdit();
-      }}
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") {
-          e.preventDefault();
-          onFinish(e.shiftKey ? -1 : 1, 0);
-        } else if (e.key === "Tab") {
-          e.preventDefault();
-          onFinish(0, e.shiftKey ? -1 : 1);
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          useEditStore.getState().cancel();
-          (document.querySelector("[data-grid-focus]") as HTMLElement | null)?.focus({ preventScroll: true });
-        } else if (editing.mode === "enter" && !editing.text.startsWith("=")) {
-          const moves: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
-          const mv = moves[e.key];
-          if (mv) {
-            e.preventDefault();
-            onFinish(mv[0], mv[1]);
-          }
-        }
-      }}
+    <FormulaInput
+      variant="cell"
+      ariaLabel={t("grid.cellEditor")}
+      typo="px-[3px] py-0 text-[12.5px] leading-[19px]"
+      className="z-[5] border-2 border-blue-700 bg-white shadow-md dark:bg-slate-900"
+      style={{ position: "absolute", left: left - 1, top: top - 1, width: width + 1, height: Math.max(ROW_H + 1, lines.length * 19 + 4) }}
     />
   );
 }

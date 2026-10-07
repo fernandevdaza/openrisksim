@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { CellRef, ModelEvaluator } from "@openrisksim/core";
-import { SpreadsheetEngine, type SheetData, type WorkbookData } from "@openrisksim/workbook";
+import { SpreadsheetEngine, type CellStyle, type SheetData, type WorkbookData } from "@openrisksim/workbook";
 import { sanitizeModel, useModelStore } from "./model";
 import { boundsToRange, parseRangeBounds, toAddress, type RangeBounds } from "../lib/a1";
 
@@ -43,6 +43,15 @@ export interface WorkbookState {
   setActiveSheet(name: string): void;
   setSelection(sel: Selection, cursor?: string): void;
   setCell(ref: CellRef, input: string | number | null): void;
+  /**
+   * Run engine edits (`fn`) as one user edit: ends step mode, grows the sheet so `touched` is
+   * visible and bumps the versions.
+   */
+  mutate(sheet: string, touched: RangeBounds | null, fn: (engine: SpreadsheetEngine) => void): void;
+  /** Set (or clear with undefined) the number format / style of cells. */
+  setFormats(sheet: string, entries: [address: string, fmt: { z?: string; s?: CellStyle } | undefined][]): void;
+  /** Format of a cell (as rendered by the grid). */
+  formatOf(sheet: string, address: string): { z?: string; s?: CellStyle } | undefined;
   clearRange(sheet: string, range: string): void;
   undo(): void;
   redo(): void;
@@ -55,6 +64,12 @@ export interface WorkbookState {
 }
 
 let unsubscribeEngine: (() => void) | null = null;
+
+/** Model change tied to the last engine edit (cut/paste moving definitions), undone with it. */
+let linkedModelUndo: { version: number; redoVersion: number; undo: () => void; redo: () => void } | null = null;
+export function linkModelUndo(undo: () => void, redo: () => void): void {
+  linkedModelUndo = { version: useWorkbookStore.getState().editVersion, redoVersion: -1, undo, redo };
+}
 let muted = 0;
 let bumpScheduled = false;
 
@@ -215,6 +230,52 @@ export const useWorkbookStore = create<WorkbookState>()((set, get) => {
       edited();
     },
 
+    mutate: (sheet, touched, fn) => {
+      const { engine } = get();
+      if (!engine) return;
+      get().endStep();
+      fn(engine);
+      if (touched) growMeta(sheet, touched);
+      edited();
+    },
+
+    setFormats: (sheet, entries) => {
+      const { workbook, engine } = get();
+      if (!workbook || !entries.length) return;
+      const sheets = workbook.sheets.map((s) => {
+        if (s.name !== sheet) return s;
+        const cells = { ...s.cells };
+        for (const [addr, fmt] of entries) {
+          const cur = cells[addr];
+          if (!fmt || (!fmt.z && !fmt.s)) {
+            if (cur && (cur.z || cur.s)) {
+              const { z: _z, s: _s, ...rest } = cur;
+              void _z;
+              void _s;
+              cells[addr] = rest;
+            }
+          } else cells[addr] = { ...(cur ?? {}), z: fmt.z, s: fmt.s };
+          try {
+            engine?.setCellFormat({ sheet, address: addr }, fmt);
+          } catch {
+            /* unknown sheet */
+          }
+        }
+        return { ...s, cells };
+      });
+      set((s) => ({ workbook: { ...workbook, sheets }, version: s.version + 1 }));
+    },
+
+    formatOf: (sheet, address) => {
+      const c = get().workbook?.sheets.find((s) => s.name === sheet)?.cells[address];
+      if (c && (c.z || c.s)) return { z: c.z, s: c.s };
+      try {
+        return get().engine?.getCellFormat({ sheet, address });
+      } catch {
+        return undefined;
+      }
+    },
+
     clearRange: (sheet, range) => {
       const { engine } = get();
       const b = parseRangeBounds(range);
@@ -228,13 +289,23 @@ export const useWorkbookStore = create<WorkbookState>()((set, get) => {
 
     undo: () => {
       get().endStep();
+      const link = linkedModelUndo && linkedModelUndo.version === get().editVersion ? linkedModelUndo : null;
       get().engine?.undo();
       edited();
+      if (link) {
+        link.undo();
+        link.redoVersion = get().editVersion;
+      }
     },
     redo: () => {
       get().endStep();
+      const link = linkedModelUndo && linkedModelUndo.redoVersion === get().editVersion ? linkedModelUndo : null;
       get().engine?.redo();
       edited();
+      if (link) {
+        link.redo();
+        link.version = get().editVersion;
+      }
     },
 
     setColWidth: (sheet, col, px) => {

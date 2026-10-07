@@ -1,6 +1,7 @@
 import { actions } from "./actions";
 import { useUiStore } from "./store/ui";
 import { useSimulationStore } from "./store/simulation";
+import { openInsertFunction, toggleShowFormulas } from "./grid/formulaActions";
 
 /** Displayed in Help → Keyboard shortcuts (labels are i18n keys). */
 export const SHORTCUTS: { keys: string; label: string }[] = [
@@ -19,9 +20,18 @@ export const SHORTCUTS: { keys: string; label: string }[] = [
   { keys: "Enter / Tab", label: "help.kCommit" },
   { keys: "Shift+Arrow", label: "help.kExtend" },
   { keys: "Ctrl+Arrow", label: "help.kJump" },
-  { keys: "Ctrl+C / Ctrl+V", label: "help.kCopyPaste" },
+  { keys: "Ctrl+C / Ctrl+X / Ctrl+V", label: "help.kCopyPaste" },
   { keys: "Ctrl+Z / Ctrl+Y", label: "help.kUndo" },
   { keys: "Delete", label: "help.kDelete" },
+  { keys: "F4", label: "help.kAbsolute" },
+  { keys: "Shift+F3", label: "formula.insertFunction" },
+  { keys: "Alt+=", label: "formula.autoSum" },
+  { keys: "Ctrl+D / Ctrl+R", label: "help.kFill" },
+  { keys: "Ctrl+Shift+V", label: "clipboard.pasteValues" },
+  { keys: "Ctrl+Enter", label: "help.kFillSelection" },
+  { keys: "Alt+Enter", label: "help.kNewLine" },
+  { keys: "Ctrl+`", label: "formula.showFormulas" },
+  { keys: "Ctrl+Shift+U", label: "help.kExpandBar" },
 ];
 
 /** Global shortcuts. Returns the remover. */
@@ -46,6 +56,21 @@ export function installShortcuts(): () => void {
       return;
     }
     const mod = e.ctrlKey || e.metaKey;
+    if (mod && !e.altKey && e.code === "Backquote") {
+      e.preventDefault();
+      toggleShowFormulas();
+      return;
+    }
+    if (mod && e.shiftKey && !e.altKey && e.code === "KeyU") {
+      e.preventDefault();
+      ui.setFormulaBarExpanded(!ui.formulaBarExpanded);
+      return;
+    }
+    if (e.key === "F3" && e.shiftKey && !mod) {
+      e.preventDefault();
+      openInsertFunction();
+      return;
+    }
     if (mod && !e.altKey && !e.shiftKey) {
       if (e.code === "KeyO") {
         e.preventDefault();
