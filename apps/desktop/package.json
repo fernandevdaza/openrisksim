@@ -15,8 +15,8 @@
     "dist": "pnpm --filter @openrisksim/web build && node scripts/copy-web.mjs && electron-builder --publish never"
   },
   "devDependencies": {
-    "electron": "^44.5.1",
-    "electron-builder": "^26.15.3"
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0"
   },
   "build": {
     "appId": "io.github.fernandevdaza.openrisksim",
